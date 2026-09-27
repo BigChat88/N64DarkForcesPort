@@ -7,7 +7,7 @@ The libdragon host tools `tools/pack_rom.py` runs:
 | `mkdfs` | pack the game files into the DragonFS filesystem image |
 | `n64tool` | assemble engine + symbols + filesystem into the `.z64` |
 | `ed64romconfig` | write the save type / Expansion Pak flags into the ROM header |
-| `audioconv64` | convert your SoundFont (`.sf2`) to `MUSIC.SF64` |
+| `audioconv64` | convert the SoundFont (`soundfont/SC55.sf2`) to `MUSIC.SF64` |
 
 `pack_rom.py` looks for them in `--tools-dir`, `$N64_INST/bin`, this folder
 and then `PATH`.

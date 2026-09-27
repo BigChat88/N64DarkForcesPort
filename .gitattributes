@@ -4,3 +4,4 @@ Makefile text eol=lf
 *.mk     text eol=lf
 *.cmd    text eol=crlf
 *.png    binary
+*.sf2    binary

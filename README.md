@@ -31,12 +31,12 @@ matter. You can also drop a single `.zip` of your install folder into
 `gamedata/`, or point the packer at the install folder directly with
 `--gamedata`.
 
-### Music (optional)
+### Music
 
-Dark Forces' music is General MIDI. Put a SoundFont 2 file (`.sf2`) in
-`soundfont/` and it is converted and packed into the ROM; a Roland SC-55 style
-General MIDI SoundFont sounds closest to the original. Without one, the game
-runs without music. See [soundfont/README.md](soundfont/README.md).
+Dark Forces' music is General MIDI. The project ships the SoundFont it plays
+it with, a Roland SC-55 style one (`soundfont/SC55.sf2`); every build converts
+it and packs it into the ROM, nothing to do on your side. See
+[soundfont/README.md](soundfont/README.md).
 
 ## How to build the ROM
 
@@ -44,8 +44,7 @@ You only need **[Python 3](https://www.python.org/downloads/)** on your `PATH`
 (`python --version`). No Docker or N64 toolchain.
 
 1. Grab the latest [Release](../../releases) and unzip it.
-2. Put your Dark Forces files in `gamedata/` (see above), and optionally a
-   SoundFont in `soundfont/`.
+2. Put your Dark Forces files in `gamedata/` (see above).
 3. Build it:
    * **Windows:** double-click `build.cmd` (or run it from a terminal).
    * **Any platform:** `python tools/pack_rom.py`
@@ -58,7 +57,7 @@ Other sources for the game files:
 
 ```sh
 python tools/pack_rom.py --gamedata "C:/Games/Dark Forces/Game"
-python tools/pack_rom.py --gamedata path/to/dark-forces.zip --soundfont path/to/gm.sf2
+python tools/pack_rom.py --gamedata path/to/dark-forces.zip
 ```
 
 The Release ships the host tools for Windows and Linux x86-64. On other
@@ -103,8 +102,7 @@ cd N64DarkForcesPort
 libdragon install        # first time only: builds the pinned libdragon into the container
 ```
 
-With the game files in `gamedata/` (and optionally a SoundFont in
-`soundfont/`):
+With the game files in `gamedata/`:
 
 ```sh
 libdragon make -j8
@@ -124,30 +122,6 @@ builds `darkforces64.z64` straight from source. Useful options (see the
 engine + intro sprites + ROM header settings) into `build/engine/`, the same
 thing CI publishes in each Release. `tools/pack_rom.py` picks it up from
 there automatically.
-
-## Releases and versioning
-
-The project version lives in [`VERSION`](VERSION). Every push to `main`
-(including merged pull requests) runs
-[`.github/workflows/release.yml`](.github/workflows/release.yml), which builds
-the engine and the host tools from source and publishes the Release
-`v<VERSION>` with a ready-to-use `N64DarkForcesPort-<VERSION>.zip`. Bump
-`VERSION` in the pull request to publish a new Release; pull requests are
-built as a check without publishing.
-
-## Acknowledgements
-
-* **[luciusDXL](https://github.com/luciusDXL)** for
-  **[The Force Engine](https://github.com/luciusDXL/TheForceEngine)**, the
-  reverse-engineered Dark Forces engine this port runs.
-* **[BSzili](https://github.com/BSzili)** for the
-  [Amiga port of The Force Engine](https://github.com/BSzili/TheForceEngine/tree/amiga),
-  which this port starts from (low-spec code paths and big-endian fixes; see
-  [tfe/UPSTREAM.md](tfe/UPSTREAM.md)).
-* The **[libdragon](https://github.com/DragonMinded/libdragon)** team for the
-  open-source N64 SDK.
-* The boot intro's dragon logo comes from the N64brew-GameJam2024 repository
-  (MIT), see [assets/intro/README.md](assets/intro/README.md).
 
 ## License
 

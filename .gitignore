@@ -17,10 +17,6 @@ gamedata/*
 !gamedata/.gitkeep
 original/
 
-# --- SoundFonts are provided by each user (see soundfont/README.md) ---
-soundfont/*.sf2
-soundfont/*.SF2
-
 # --- prebuilt engine / host tools: built by `make engine` and
 # tools/vendor/bin/build-tools.sh, or taken from a GitHub Release ---
 tools/vendor/bin/*

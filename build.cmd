@@ -4,9 +4,8 @@ rem
 rem  1. copy your Dark Forces files (DARK.GOB, SOUNDS.GOB, SPRITES.GOB,
 rem     TEXTURES.GOB, LOCAL.MSG and the LFD folder) into  gamedata\
 rem     (or a .zip of your install folder)
-rem  2. optional: put a General MIDI SoundFont (.sf2) in  soundfont\
-rem  3. run this file
-rem  4. the ROM appears in  output\darkforces64.z64
+rem  2. run this file
+rem  3. the ROM appears in  output\darkforces64.z64
 rem
 rem  Extra options are passed straight through, e.g.:
 rem     build.cmd --gamedata "C:\Games\Dark Forces\Game"

@@ -177,11 +177,9 @@ N64_ROM_EXPANSIONPAK = required
 
 $(BUILD_DIR)/$(ROM_NAME).dfs: $(GAMEDATA)
 
-# Music: the first SoundFont found in soundfont/ (your own .sf2, not part of
-# this repository) is converted to rom:/MUSIC.SF64. Without one, the game runs
-# without music.
-SOUNDFONT := $(firstword $(wildcard soundfont/*.sf2))
-ifneq ($(SOUNDFONT),)
+# Music: the project's General MIDI SoundFont (soundfont/SC55.sf2, see its
+# README) is converted to rom:/MUSIC.SF64.
+SOUNDFONT = soundfont/SC55.sf2
 MUSIC_SF64 = gamedata/MUSIC.SF64
 $(MUSIC_SF64): $(SOUNDFONT)
 	@mkdir -p $(BUILD_DIR)/sf64
@@ -189,7 +187,6 @@ $(MUSIC_SF64): $(SOUNDFONT)
 	$(N64_AUDIOCONV) -o $(BUILD_DIR)/sf64 "$<"
 	mv $(BUILD_DIR)/sf64/*.sf64 $@
 $(BUILD_DIR)/$(ROM_NAME).dfs: $(MUSIC_SF64)
-endif
 
 # Boot intro: the libdragon dragon logo (assets/intro, see its README) is converted
 # to rom:/intro/*.sprite.

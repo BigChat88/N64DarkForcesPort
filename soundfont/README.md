@@ -1,9 +1,8 @@
 # SoundFont for the music
 
 Dark Forces' music is General MIDI, played on the N64 by libdragon's SF64
-synthesizer. Put a SoundFont 2 file (`.sf2`) in this folder; the build converts
-the first one it finds to `rom:/MUSIC.SF64`. SoundFonts are not part of the
-repository (`*.sf2` is ignored by git).
+synthesizer. `SC55.sf2` is the SoundFont the port uses: a Roland SC-55 style
+General MIDI set, the sound module the original game's music was written for.
 
-A Roland SC-55 style General MIDI SoundFont sounds closest to the original
-game. Without a SoundFont the game runs without music.
+Every build converts it to `rom:/MUSIC.SF64` with `audioconv64`: the Makefile
+(`make`) and `tools/pack_rom.py` (`build.cmd`) both use this exact file.

@@ -11,7 +11,7 @@ tools/vendor/engine/), or build it yourself with `make engine` inside
 
     python tools/pack_rom.py
     python tools/pack_rom.py --gamedata "C:/Games/Dark Forces/Game"
-    python tools/pack_rom.py --gamedata star-wars-dark-forces.zip --soundfont my.sf2
+    python tools/pack_rom.py --gamedata star-wars-dark-forces.zip
 
 --gamedata may be a folder (your install folder works as-is) or a .zip; the
 files below are looked up anywhere inside it, in any letter case:
@@ -19,7 +19,7 @@ files below are looked up anywhere inside it, in any letter case:
     DARK.GOB  SOUNDS.GOB  SPRITES.GOB  TEXTURES.GOB  LOCAL.MSG  LFD/*.LFD
 
 Requires the libdragon host tools (mkdfs, n64tool, ed64romconfig, and
-audioconv64 for the SoundFont) -- found via --tools-dir, $N64_INST/bin,
+audioconv64 for the music) -- found via --tools-dir, $N64_INST/bin,
 tools/vendor/bin/ or PATH. See tools/vendor/bin/README.md.
 """
 from __future__ import annotations
@@ -40,6 +40,8 @@ ROM_NAME = "darkforces64"
 REQUIRED_FILES = ("DARK.GOB", "SOUNDS.GOB", "SPRITES.GOB", "TEXTURES.GOB", "LOCAL.MSG")
 LFD_DIR = "LFD"
 MUSIC_NAME = "MUSIC.SF64"
+# The project's General MIDI SoundFont, converted to MUSIC.SF64 (see soundfont/README.md).
+SOUNDFONT = ROOT / "soundfont" / "SC55.sf2"
 
 ENGINE_FILES = (f"{ROM_NAME}.elf.stripped", f"{ROM_NAME}.elf.sym")
 # Fallback header settings if the engine folder has no rom.cfg (written by
@@ -171,15 +173,6 @@ def find_gamedata(explicit: Path | None) -> GameData:
     return data
 
 
-def find_soundfont(explicit: Path | None) -> Path | None:
-    if explicit:
-        if not explicit.is_file():
-            die(f"{explicit}: no such file")
-        return explicit
-    sf = sorted(p for p in (ROOT / "soundfont").glob("*") if p.suffix.lower() == ".sf2")
-    return sf[0] if sf else None
-
-
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Pack your own Dark Forces files + the prebuilt engine into a Nintendo 64 ROM.")
@@ -187,9 +180,6 @@ def main() -> None:
     ap.add_argument("--gamedata", type=Path, default=None,
                     help="folder or .zip with your Dark Forces files (default: gamedata/, "
                          "or the single .zip inside it)")
-    ap.add_argument("--soundfont", type=Path, default=None,
-                    help="General MIDI SoundFont (.sf2) for the music (default: the first "
-                         ".sf2 in soundfont/; without one the game has no music)")
     ap.add_argument("--out", type=Path, default=None,
                     help=f"output ROM path (default: output/{ROM_NAME}.z64)")
     ap.add_argument("--engine-dir", type=Path, default=None,
@@ -214,15 +204,16 @@ def main() -> None:
             "  or point --gamedata at your install folder or a .zip of it"
         )
 
-    soundfont = find_soundfont(args.soundfont)
+    if not SOUNDFONT.is_file():
+        die(f"{SOUNDFONT}: missing - it is part of the project, get it again from the repository")
     engine = find_engine(args.engine_dir)
     cfg = read_rom_cfg(engine)
-    tool_names = ["mkdfs", "n64tool", "ed64romconfig"] + (["audioconv64"] if soundfont else [])
+    tool_names = ["mkdfs", "n64tool", "ed64romconfig", "audioconv64"]
     tools = {t: find_tool(t, args.tools_dir) for t in tool_names}
     out = args.out or (ROOT / "output" / f"{ROM_NAME}.z64")
 
     log(f"gamedata : {data.path}  ({len(data.lfds())} LFD file(s))")
-    log(f"music    : {soundfont or ('prebuilt ' + MUSIC_NAME if data.has(MUSIC_NAME) else 'none')}")
+    log(f"music    : {SOUNDFONT}")
     log(f"engine   : {engine}")
     for t, p in tools.items():
         log(f"tool     : {t:14s} {p}")
@@ -239,22 +230,16 @@ def main() -> None:
             shutil.copytree(intro, fsroot / "intro")
 
         log("[2/4] music")
-        if soundfont:
-            sf_out = work / "sf64"
-            sf_out.mkdir()
-            # Run from the SoundFont's folder with a bare file name: audioconv64
-            # only splits paths on '/', so a Windows path would end up in the
-            # output file name.
-            run([tools["audioconv64"], "-o", sf_out, soundfont.name],
-                cwd=str(soundfont.resolve().parent))
-            converted = sorted(sf_out.glob("*.sf64"))
-            if not converted:
-                die(f"audioconv64 produced no .sf64 from {soundfont}")
-            shutil.move(str(converted[0]), fsroot / MUSIC_NAME)
-        elif data.has(MUSIC_NAME):
-            data.copy(MUSIC_NAME, fsroot / MUSIC_NAME)
-        else:
-            log("  no SoundFont found: the game will run without music (see soundfont/README.md)")
+        sf_out = work / "sf64"
+        sf_out.mkdir()
+        # Run from the SoundFont's folder with a bare file name: audioconv64
+        # only splits paths on '/', so a Windows path would end up in the
+        # output file name.
+        run([tools["audioconv64"], "-o", sf_out, SOUNDFONT.name], cwd=str(SOUNDFONT.parent))
+        converted = sorted(sf_out.glob("*.sf64"))
+        if not converted:
+            die(f"audioconv64 produced no .sf64 from {SOUNDFONT}")
+        shutil.move(str(converted[0]), fsroot / MUSIC_NAME)
 
         log("[3/4] mkdfs")
         dfs = work / f"{ROM_NAME}.dfs"

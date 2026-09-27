@@ -3,9 +3,9 @@ name: release
 # Every pull request builds the engine and the host tools as a check. A push
 # to main (a direct commit or a merged pull request) also publishes a GitHub
 # Release named after VERSION, whose asset is a self-contained "everything
-# you need to build the ROM" archive: drop in your own Dark Forces files (and
-# optionally a SoundFont), then run build.cmd / tools/pack_rom.py -- no
-# Docker, no N64 toolchain required.
+# you need to build the ROM" archive (SoundFont included): drop in your own
+# Dark Forces files, then run build.cmd / tools/pack_rom.py -- no Docker, no
+# N64 toolchain required.
 on:
   push:
     branches: [main, master]
