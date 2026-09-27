@@ -1,0 +1,106 @@
+name: release
+
+# Every pull request builds the engine and the host tools as a check. A push
+# to main (a direct commit or a merged pull request) also publishes a GitHub
+# Release named after VERSION, whose asset is a self-contained "everything
+# you need to build the ROM" archive: drop in your own Dark Forces files (and
+# optionally a SoundFont), then run build.cmd / tools/pack_rom.py -- no
+# Docker, no N64 toolchain required.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/dragonminded/libdragon:latest   # mips64-elf toolchain + $N64_INST
+
+    steps:
+      - name: Install packaging deps
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends zip rsync git ca-certificates \
+            gcc g++ gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Trust the workspace
+        run: git config --global --add safe.directory '*'
+
+      - name: Version
+        id: ver
+        run: |
+          VER="$(tr -d ' \r\n' < VERSION)"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VER"    >> "$GITHUB_OUTPUT"
+
+      - name: Build libdragon (pinned submodule) + engine
+        run: |
+          make -C libdragon -j"$(nproc)" install
+          # The library `install` target doesn't build the host tools; `make
+          # engine` needs n64sym + n64elfcompress + mksprite (intro sprites).
+          make -C libdragon/tools -j"$(nproc)" n64sym-install n64elfcompress-install mksprite-install
+          make -j"$(nproc)" engine
+          ls -lR build/engine
+
+      - name: Build the host tools (Linux + Windows)
+        run: |
+          mkdir -p hosttools/linux hosttools/windows
+          bash tools/vendor/bin/build-tools.sh
+          mv tools/vendor/bin/n64tool tools/vendor/bin/mkdfs tools/vendor/bin/ed64romconfig tools/vendor/bin/audioconv64 hosttools/linux/
+          CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ bash tools/vendor/bin/build-tools.sh
+          mv tools/vendor/bin/*.exe hosttools/windows/
+          ls -l hosttools/*
+
+      - name: Stage the bundle
+        id: stage
+        run: |
+          set -eu
+          NAME="N64DarkForcesPort-${{ steps.ver.outputs.version }}"
+          DEST="stage/$NAME"
+          mkdir -p "$DEST"
+          # exactly the tracked source (the git-ignored game data is excluded
+          # by definition), including the libdragon submodule
+          git ls-files --recurse-submodules -z | rsync -a --files-from=- --from0 ./ "$DEST/"
+          # the CI-built binaries the packer needs
+          cp -r build/engine/. "$DEST/tools/vendor/engine/"
+          cp hosttools/linux/* hosttools/windows/* "$DEST/tools/vendor/bin/"
+          # provenance
+          {
+            echo "N64DarkForcesPort ${{ steps.ver.outputs.version }}"
+            echo "commit:  ${GITHUB_SHA}"
+            echo "ref:     ${GITHUB_REF}"
+            echo "run:     ${GITHUB_RUN_NUMBER}"
+            echo "built:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "$DEST/BUILD_INFO.txt"
+          ( cd stage && zip -qr "../$NAME.zip" "$NAME" )
+          ls -l "$NAME.zip"
+          echo "asset=$NAME.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.stage.outputs.asset }}
+          path: ${{ steps.stage.outputs.asset }}
+          retention-days: 14
+
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: N64DarkForcesPort ${{ steps.ver.outputs.version }}
+          prerelease: true
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          files: ${{ steps.stage.outputs.asset }}

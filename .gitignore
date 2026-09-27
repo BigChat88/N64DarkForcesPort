@@ -1,0 +1,41 @@
+# --- build output ---
+build/
+*.z64
+*.v64
+output/*
+!output/README.md
+
+# --- emulator save files (Ares/simple64 write them next to the ROM) ---
+*.eeprom
+*.ram
+*.sra
+*.mpk
+
+# --- copyrighted game data: never commit ---
+# Bring your own Dark Forces files; see README.md.
+gamedata/*
+!gamedata/.gitkeep
+original/
+
+# --- SoundFonts are provided by each user (see soundfont/README.md) ---
+soundfont/*.sf2
+soundfont/*.SF2
+
+# --- prebuilt engine / host tools: built by `make engine` and
+# tools/vendor/bin/build-tools.sh, or taken from a GitHub Release ---
+tools/vendor/bin/*
+!tools/vendor/bin/*.sh
+!tools/vendor/bin/README.md
+tools/vendor/engine/*
+!tools/vendor/engine/README.md
+
+# --- python cache ---
+__pycache__/
+*.pyc
+
+# --- libdragon CLI local cache (keep the project marker) ---
+.libdragon/*
+!.libdragon/config.json
+
+# --- CI staging ---
+stage/

@@ -1,0 +1,296 @@
+CC := m68k-amigaos-gcc
+CXX := m68k-amigaos-g++
+AS := vasmm68k_mot -I/opt/amiga/m68k-amigaos/ndk-include -Faout -m68020
+STRIP := m68k-amigaos-strip
+RM := rm -f
+
+CPU ?= 060
+ifeq ($(CPU),060)
+ARCH = -m68060 -mhard-float
+else
+ARCH = -m68040 -mhard-float
+endif
+
+DEBUG ?= 0
+DEFINES := 
+INCLUDES := -I. -Iamiga
+CFLAGS := $(ARCH) $(DEFINES) $(INCLUDES) -fno-common -noixemul
+ifneq ($(DEBUG), 1)
+CFLAGS += -O2 -DNDEBUG -fomit-frame-pointer
+CFLAGS += -ffast-math -fbbb=-
+#CFLAGS += -fno-math-errno -fno-signaling-nans -fno-trapping-math -freciprocal-math -fno-peephole2 
+else
+CFLAGS += -g -D_DEBUG
+endif
+CFLAGS += -save-temps
+#CFLAGS += -fstack-usage -Wstack-usage=1024
+CFLAGS += -Wall -Wno-unused-variable -Wno-switch -Wno-sign-compare
+CXXFLAGS = $(CFLAGS) -fno-exceptions -fno-rtti
+
+LDFLAGS := -noixemul -lm $(ARCH) -ldebug # -fno-exceptions -fno-rtti
+
+UNUSED_SRC = \
+	TFE_System/profiler.cpp \
+	TFE_System/frameLimiter.cpp \
+	TFE_Asset/colormapAsset.cpp \
+	TFE_Asset/fontAsset.cpp \
+	TFE_Asset/gameMessages.cpp \
+	TFE_Asset/gmidAsset.cpp \
+	TFE_Asset/modelAsset.cpp \
+	TFE_Asset/paletteAsset.cpp \
+	TFE_Asset/textureAsset.cpp \
+	TFE_Asset/spriteAsset.cpp \
+	TFE_Asset/vocAsset.cpp \
+	TFE_Asset/levelList.cpp \
+	TFE_Asset/levelObjectsAsset.cpp \
+	TFE_Archive/gobMemoryArchive.cpp \
+	TFE_Game/reticle.cpp \
+	TFE_Memory/memoryRegion.cpp \
+	amiga/dbopl.cpp \
+	TFE_System/memoryPool.cpp \
+	TFE_System/tfeMessage.cpp \
+
+
+AMIGA_SRC = \
+	amiga/c2p1x1_8_c5_bm_040.s \
+	amiga/audio_amiga.cpp \
+	amiga/midi_amiga.cpp \
+	amiga/render_amiga.cpp \
+	amiga/thread_amiga.cpp \
+	amiga/stubs_amiga.cpp \
+	amiga/memory_amiga.cpp \
+	amiga/main_amiga.cpp \
+	amiga/doommidi.s \
+	amiga/midi_doom.cpp \
+	amiga/message_amiga.cpp \
+	amiga/frontend_amiga.cpp \
+
+#MAIN_SRC = \
+#	main.cpp \
+
+ARCHIVE_SRC = \
+	TFE_Archive/archive.cpp \
+	TFE_Archive/gobArchive.cpp \
+	TFE_Archive/labArchive.cpp \
+	TFE_Archive/lfdArchive.cpp \
+
+ASSET_SRC = \
+	TFE_Asset/assetSystem.cpp \
+	TFE_Asset/dfKeywords.cpp \
+	TFE_Asset/modelAsset_jedi.cpp \
+	TFE_Asset/spriteAsset_Jedi.cpp \
+	TFE_Asset/vueAsset.cpp \
+
+UNUSED_AUDIO = \
+	TFE_Audio/audioDevice.cpp \
+	TFE_Audio/RtAudio.cpp \
+	TFE_Audio/RtMidi.cpp \
+	TFE_Audio/systemMidiDevice.cpp \
+	TFE_Audio/audioSystem.cpp \
+	TFE_Audio/audioFilters.cpp \
+	TFE_Audio/MidiSynth/fm4Opl3Device.cpp \
+
+AUDIO_SRC = \
+	TFE_Audio/midiPlayer.cpp \
+
+DARKFORCES_SRC = \
+	TFE_DarkForces/agent.cpp \
+	TFE_DarkForces/animLogic.cpp \
+	TFE_DarkForces/automap.cpp \
+	TFE_DarkForces/briefingList.cpp \
+	TFE_DarkForces/cheats.cpp \
+	TFE_DarkForces/config.cpp \
+	TFE_DarkForces/darkForcesMain.cpp \
+	TFE_DarkForces/gameMessage.cpp \
+	TFE_DarkForces/gameMusic.cpp \
+	TFE_DarkForces/generator.cpp \
+	TFE_DarkForces/hitEffect.cpp \
+	TFE_DarkForces/hud.cpp \
+	TFE_DarkForces/item.cpp \
+	TFE_DarkForces/logic.cpp \
+	TFE_DarkForces/mission.cpp \
+	TFE_DarkForces/pickup.cpp \
+	TFE_DarkForces/player.cpp \
+	TFE_DarkForces/playerCollision.cpp \
+	TFE_DarkForces/projectile.cpp \
+	TFE_DarkForces/random.cpp \
+	TFE_DarkForces/sound.cpp \
+	TFE_DarkForces/time.cpp \
+	TFE_DarkForces/updateLogic.cpp \
+	TFE_DarkForces/util.cpp \
+	TFE_DarkForces/vueLogic.cpp \
+	TFE_DarkForces/weapon.cpp \
+	TFE_DarkForces/weaponFireFunc.cpp \
+	TFE_DarkForces/Actor/actor.cpp \
+	TFE_DarkForces/Actor/actorSerialization.cpp \
+	TFE_DarkForces/Actor/animTables.cpp \
+	TFE_DarkForces/Actor/bobaFett.cpp \
+	TFE_DarkForces/Actor/dragon.cpp \
+	TFE_DarkForces/Actor/enemies.cpp \
+	TFE_DarkForces/Actor/exploders.cpp \
+	TFE_DarkForces/Actor/flyers.cpp \
+	TFE_DarkForces/Actor/mousebot.cpp \
+	TFE_DarkForces/Actor/phaseOne.cpp \
+	TFE_DarkForces/Actor/phaseThree.cpp \
+	TFE_DarkForces/Actor/phaseTwo.cpp \
+	TFE_DarkForces/Actor/scenery.cpp \
+	TFE_DarkForces/Actor/sewer.cpp \
+	TFE_DarkForces/Actor/troopers.cpp \
+	TFE_DarkForces/Actor/turret.cpp \
+	TFE_DarkForces/Actor/welder.cpp \
+	TFE_DarkForces/GameUI/agentMenu.cpp \
+	TFE_DarkForces/GameUI/delt.cpp \
+	TFE_DarkForces/GameUI/editBox.cpp \
+	TFE_DarkForces/GameUI/escapeMenu.cpp \
+	TFE_DarkForces/GameUI/menu.cpp \
+	TFE_DarkForces/GameUI/missionBriefing.cpp \
+	TFE_DarkForces/GameUI/pda.cpp \
+	TFE_DarkForces/GameUI/uiDraw.cpp \
+	TFE_DarkForces/Landru/cutscene.cpp \
+	TFE_DarkForces/Landru/cutsceneList.cpp \
+	TFE_DarkForces/Landru/cutscene_film.cpp \
+	TFE_DarkForces/Landru/cutscene_player.cpp \
+	TFE_DarkForces/Landru/lactor.cpp \
+	TFE_DarkForces/Landru/lactorAnim.cpp \
+	TFE_DarkForces/Landru/lactorCust.cpp \
+	TFE_DarkForces/Landru/lactorDelt.cpp \
+	TFE_DarkForces/Landru/lcanvas.cpp \
+	TFE_DarkForces/Landru/ldraw.cpp \
+	TFE_DarkForces/Landru/lfade.cpp \
+	TFE_DarkForces/Landru/lfont.cpp \
+	TFE_DarkForces/Landru/lmusic.cpp \
+	TFE_DarkForces/Landru/lpalette.cpp \
+	TFE_DarkForces/Landru/lrect.cpp \
+	TFE_DarkForces/Landru/lsound.cpp \
+	TFE_DarkForces/Landru/lsystem.cpp \
+	TFE_DarkForces/Landru/ltimer.cpp \
+	TFE_DarkForces/Landru/lview.cpp \
+	TFE_DarkForces/Landru/textCrawl.cpp \
+
+FILESYSTEM_SRC = \
+	TFE_FileSystem/filestream-posix.cpp \
+	TFE_FileSystem/fileutil-posix.cpp \
+	TFE_FileSystem/paths-posix.cpp \
+	TFE_FileSystem/memorystream.cpp \
+
+#FRONTENDUI_SRC = \
+#	TFE_FrontEndUI/console.cpp
+
+GAME_SRC = \
+	TFE_Game/igame.cpp \
+	TFE_Game/saveSystem.cpp \
+
+INPUT_SRC = \
+	TFE_Input/input.cpp \
+	TFE_Input/inputMapping.cpp \
+
+JEDI_SRC = \
+	TFE_Jedi/Collision/collision.cpp \
+	TFE_Jedi/IMuse/imConst.cpp \
+	TFE_Jedi/IMuse/imDigitalSound.cpp \
+	TFE_Jedi/IMuse/imList.cpp \
+	TFE_Jedi/IMuse/imMidiCmd.cpp \
+	TFE_Jedi/IMuse/imMidiPlayer.cpp \
+	TFE_Jedi/IMuse/imSoundFader.cpp \
+	TFE_Jedi/IMuse/imTrigger.cpp \
+	TFE_Jedi/IMuse/imuse.cpp \
+	TFE_Jedi/IMuse/midiData.cpp \
+	TFE_Jedi/InfSystem/infState.cpp \
+	TFE_Jedi/InfSystem/infSystem.cpp \
+	TFE_Jedi/InfSystem/message.cpp \
+	TFE_Jedi/Level/level.cpp \
+	TFE_Jedi/Level/levelData.cpp \
+	TFE_Jedi/Level/levelTextures.cpp \
+	TFE_Jedi/Level/rfont.cpp \
+	TFE_Jedi/Level/robjData.cpp \
+	TFE_Jedi/Level/robject.cpp \
+	TFE_Jedi/Level/roffscreenBuffer.cpp \
+	TFE_Jedi/Level/rsector.cpp \
+	TFE_Jedi/Level/rtexture.cpp \
+	TFE_Jedi/Level/rwall.cpp \
+	TFE_Jedi/Math/core_math.cpp \
+	TFE_Jedi/Math/cosTable.cpp \
+	TFE_Jedi/Memory/allocator.cpp \
+	TFE_Jedi/Memory/list.cpp \
+	TFE_Jedi/Serialization/serialization.cpp \
+	TFE_Jedi/Task/task.cpp \
+
+OUTLAWS_SRC = \
+	TFE_Outlaws/outlawsMain.cpp
+
+RENDFIXED_SRC = \
+	TFE_Jedi/Renderer/RClassic_Fixed/rclassicFixed.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/rclassicFixedSharedState.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/redgePairFixed.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/rflatFixed.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/rlightingFixed.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/rsectorFixed.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/rwallFixed.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/robj3d_fixed/robj3dFixed.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/robj3d_fixed/robj3dFixed_Clipping.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/robj3d_fixed/robj3dFixed_Culling.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/robj3d_fixed/robj3dFixed_PolygonDraw.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/robj3d_fixed/robj3dFixed_PolygonSetup.cpp \
+	TFE_Jedi/Renderer/RClassic_Fixed/robj3d_fixed/robj3dFixed_TransformAndLighting.cpp \
+
+RENDFLOAT_SRC = \
+	TFE_Jedi/Renderer/RClassic_Float/rclassicFloat.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/rclassicFloatSharedState.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/redgePairFloat.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/rflatFloat.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/rlightingFloat.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/rsectorFloat.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/rwallFloat.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/robj3d_float/robj3dFloat.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/robj3d_float/robj3dFloat_Clipping.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/robj3d_float/robj3dFloat_Culling.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/robj3d_float/robj3dFloat_PolygonDraw.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/robj3d_float/robj3dFloat_PolygonSetup.cpp \
+	TFE_Jedi/Renderer/RClassic_Float/robj3d_float/robj3dFloat_TransformAndLighting.cpp \
+
+REND_SRC = \
+	TFE_Jedi/Renderer/jediRenderer.cpp \
+	TFE_Jedi/Renderer/rcommon.cpp \
+	TFE_Jedi/Renderer/rscanline.cpp \
+	TFE_Jedi/Renderer/rsectorRender.cpp \
+	TFE_Jedi/Renderer/screenDraw.cpp \
+	TFE_Jedi/Renderer/virtualFramebuffer.cpp \
+	$(RENDFIXED_SRC) \
+
+MEMORY_SRC = \
+	TFE_Memory/chunkedArray.cpp \
+
+POLYGON_SRC = \
+	TFE_Polygon/clipper.cpp \
+	TFE_Polygon/polygon.cpp \
+
+RENDERSHARED_SRC = \
+	TFE_RenderShared/lineDraw2d.cpp \
+	TFE_RenderShared/quadDraw2d.cpp \
+
+SETTINGS_SRC = \
+	TFE_Settings/settings.cpp \
+
+SYSTEM_SRC = \
+	TFE_System/log.cpp \
+	TFE_System/math.cpp \
+	TFE_System/parser.cpp \
+	TFE_System/system.cpp \
+
+
+SRCS := $(MAIN_SRC) $(AUDIO_SRC) $(INPUT_SRC) $(FRONTENDUI_SRC) $(REND_SRC) $(DARKFORCES_SRC) $(OUTLAWS_SRC) $(ASSET_SRC) $(MEMORY_SRC) $(GAME_SRC) $(JEDI_SRC) $(SETTINGS_SRC) $(ARCHIVE_SRC) $(FILESYSTEM_SRC) $(SYSTEM_SRC) $(AMIGA_SRC)
+OBJS := $(filter %.o, $(SRCS:.cpp=.o) $(SRCS:.s=.o))
+
+
+all: TheForceEngine.$(CPU)
+
+TheForceEngine.$(CPU): $(OBJS)
+	$(CXX) -o $@ $^ $(LDFLAGS) -Wl,-Map=$@.map
+ifneq ($(DEBUG), 1)
+	$(STRIP) $@
+endif
+
+.PHONY: clean
+
+clean:
+	$(RM) $(OBJS) TheForceEngine.$(CPU) TheForceEngine.$(CPU).map
