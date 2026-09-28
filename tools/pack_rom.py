@@ -33,6 +33,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from compact_levels import compact_gob
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
@@ -225,6 +227,9 @@ def main() -> None:
         log("[1/4] staging filesystem")
         for key in list(REQUIRED_FILES) + data.lfds():
             data.copy(key, fsroot / key)
+        # Without the indentation and comments of the level files the ROM fits in 64MB.
+        gob = fsroot / "DARK.GOB"
+        gob.write_bytes(compact_gob(gob.read_bytes(), log=log))
         intro = engine / "intro"
         if intro.is_dir():
             shutil.copytree(intro, fsroot / "intro")

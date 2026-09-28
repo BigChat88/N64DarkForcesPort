@@ -175,14 +175,25 @@ OBJS = $(addprefix $(BUILD_DIR)/,$(N64_SRC:.cpp=.o)) \
 # Dark Forces files (DARK.GOB, SOUNDS.GOB, SPRITES.GOB, TEXTURES.GOB, *.LFD,
 # LOCAL.MSG, ...) into gamedata/ before building; they are packed into the
 # ROM filesystem as rom:/<NAME>.
-N64_MKDFS_ROOT = gamedata
+# They are staged in $(BUILD_DIR)/filesystem, where the level files in DARK.GOB
+# lose their indentation and comments (see tools/compact_levels.py): without
+# them the ROM fits in 64MB.
+N64_MKDFS_ROOT = $(BUILD_DIR)/filesystem
 GAMEDATA = $(wildcard gamedata/*)
+FILESYSTEM_STAMP = $(BUILD_DIR)/filesystem.stamp
+$(FILESYSTEM_STAMP): $(GAMEDATA) tools/compact_levels.py
+	@echo "    [DATA] $(N64_MKDFS_ROOT)"
+	@rm -rf $(N64_MKDFS_ROOT)
+	@mkdir -p $(N64_MKDFS_ROOT)
+	@cp -r gamedata/. $(N64_MKDFS_ROOT)/
+	@python3 tools/compact_levels.py --dir $(N64_MKDFS_ROOT)
+	@touch $@
 
 N64_ROM_TITLE = "Dark Forces 64"
 N64_ROM_SAVETYPE = sram256k
 N64_ROM_EXPANSIONPAK = required
 
-$(BUILD_DIR)/$(ROM_NAME).dfs: $(GAMEDATA)
+$(BUILD_DIR)/$(ROM_NAME).dfs: $(FILESYSTEM_STAMP)
 
 # Music: the project's General MIDI SoundFont (soundfont/SC55.sf2, see its
 # README) is converted to rom:/MUSIC.SF64.
@@ -193,7 +204,7 @@ $(MUSIC_SF64): $(SOUNDFONT)
 	@echo "    [SF64] $<"
 	$(N64_AUDIOCONV) -o $(BUILD_DIR)/sf64 "$<"
 	mv $(BUILD_DIR)/sf64/*.sf64 $@
-$(BUILD_DIR)/$(ROM_NAME).dfs: $(MUSIC_SF64)
+$(FILESYSTEM_STAMP): $(MUSIC_SF64)
 
 # Boot intro: the libdragon dragon logo (assets/intro, see its README) is converted
 # to rom:/intro/*.sprite.
@@ -202,7 +213,7 @@ gamedata/intro/%.sprite: assets/intro/%.png
 	@mkdir -p gamedata/intro
 	@echo "    [SPRITE] $@"
 	$(N64_MKSPRITE) -f I8 -o gamedata/intro "$<"
-$(BUILD_DIR)/$(ROM_NAME).dfs: $(INTRO_SPRITES)
+$(FILESYSTEM_STAMP): $(INTRO_SPRITES)
 
 $(BUILD_DIR)/$(ROM_NAME).elf: $(OBJS)
 $(ROM_NAME).z64: $(BUILD_DIR)/$(ROM_NAME).dfs

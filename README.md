@@ -16,11 +16,10 @@ Forces files; the build packs them into the ROM.
   emulator. The game needs it and won't boot without one.
 * Saves go to the cartridge's SRAM (256 kbit): your flashcart or emulator
   handles that automatically.
-* **A flashcart that supports ROMs larger than 64MB.** The ROM is about 67MB
-  (it packs the game data and the music), more than the 64MB of the original
-  cartridge address space, so it only runs on newer flashcarts such as the
-  **EverDrive-64 X7**, the **EverDrive-64 Pro** or the **SummerCart64**. Older
-  flashcarts that stop at 64MB can't load it.
+* On real hardware, a flashcart that takes **64MB ROMs** (most do, e.g. the
+  EverDrive-64 or the SummerCart64). The ROM is about 63MB: the level files are
+  packed without their indentation and comments to make it fit (see
+  `tools/compact_levels.py`); your own game files are not modified.
 
 ## The game files you need
 
@@ -56,8 +55,7 @@ You only need **[Python 3](https://www.python.org/downloads/)** on your `PATH`
 4. Wait for `OK -> output/darkforces64.z64`. That file is your ROM: run it in
    an emulator (e.g. [Ares](https://ares-emu.net/),
    [simple64](https://simple64.github.io/)) with the Expansion Pak enabled, or
-   copy it to a flashcart that supports ROMs larger than 64MB (see
-   [What you need to play](#what-you-need-to-play)).
+   copy it to a flashcart (e.g. EverDrive-64).
 
 Other sources for the game files:
 
