@@ -16,7 +16,6 @@
 #include "rclassicFixedSharedState.h"
 #include "robj3d_fixed/robj3dFixed.h"
 #include "../rcommon.h"
-#include "profile_n64.h"
 #ifdef __AMIGA__
 #define s_width (320)
 #define s_height (200)
@@ -32,6 +31,36 @@ namespace TFE_Jedi
 		{
 			return ((const RWallSegmentFixed*)r0)->wallX0 - ((const RWallSegmentFixed*)r1)->wallX0;
 		}
+
+#ifdef __N64__
+		// __N64__: copies the depth columns outside [x0, x1] from the parent adjoin level.
+		void depth_copyRest(const fixed16_16* depthPrev, s32 x0, s32 x1)
+		{
+			const s32 minX = s_minScreenX_Pixels;
+			const s32 maxX = s_minScreenX_Pixels + s_width - 1;
+			if (x0 > minX) { memcpy(&s_rcfState.depth1d[minX], &depthPrev[minX], (x0 - minX) * sizeof(fixed16_16)); }
+			if (x1 < maxX) { memcpy(&s_rcfState.depth1d[x1 + 1], &depthPrev[x1 + 1], (maxX - x1) * sizeof(fixed16_16)); }
+		}
+
+		// __N64__: insertion sort instead of qsort(), which calls wallSortX() through a
+		// pointer for every comparison. A sector only has a few visible segments and they
+		// mostly come out of wall_mergeSort() in order already. The segments do not overlap
+		// on screen, so there are no ties and the order matches qsort().
+		void wallSortX_insertion(RWallSegmentFixed* segs, s32 count)
+		{
+			for (s32 i = 1; i < count; i++)
+			{
+				if (segs[i].wallX0 >= segs[i - 1].wallX0) { continue; }
+				const RWallSegmentFixed seg = segs[i];
+				s32 j = i - 1;
+				for (; j >= 0 && segs[j].wallX0 > seg.wallX0; j--)
+				{
+					segs[j + 1] = segs[j];
+				}
+				segs[j + 1] = seg;
+			}
+		}
+#endif
 
 		s32 sortObjectsFixed(const void* r0, const void* r1)
 		{
@@ -220,10 +249,27 @@ namespace TFE_Jedi
 		s_windowTop = winTop;
 		s_windowBot = winBot;
 		fixed16_16* depthPrev = nullptr;
+#ifdef __N64__
+		s32 depthCopyX0 = s_minScreenX_Pixels;					// columns already copied from depthPrev
+		s32 depthCopyX1 = s_minScreenX_Pixels + s_width - 1;
+#endif
 		if (s_adjoinDepth > 1)
 		{
 			depthPrev = &s_rcfState.depth1d_all[(s_adjoinDepth - 2) * s_width];
+#ifdef __N64__
+			// __N64__: copy only the columns walls and sprites of this sector can read: the
+			// adjoin window, widened to the sprite clip range (s_windowX0/X1). 3D objects
+			// test depth across the whole screen, so the rest is copied before the first one
+			// (see depth_copyRest()); the parent row does not change while this sector is drawn.
+			depthCopyX0 = max(min(s_windowX0, s_windowMinX_Pixels), s_minScreenX_Pixels);
+			depthCopyX1 = min(max(s_windowX1, s_windowMaxX_Pixels), s_minScreenX_Pixels + s_width - 1);
+			if (depthCopyX0 <= depthCopyX1)
+			{
+				memcpy(&s_rcfState.depth1d[depthCopyX0], &depthPrev[depthCopyX0], (depthCopyX1 - depthCopyX0 + 1) * sizeof(fixed16_16));
+			}
+#else
 			memcpy(&s_rcfState.depth1d[s_minScreenX_Pixels], &depthPrev[s_minScreenX_Pixels], s_width * 4);
+#endif
 		}
 
 		s_wallMaxCeilY = s_windowMinY_Pixels;
@@ -281,7 +327,11 @@ namespace TFE_Jedi
 		s_curWallSeg += drawSegCnt;
 
 		TFE_ZONE_BEGIN(wallQSort, "Wall QSort");
+#ifdef __N64__
+			wallSortX_insertion(wallSegment, drawSegCnt);
+#else
 			qsort(wallSegment, drawSegCnt, sizeof(RWallSegmentFixed), wallSortX);
+#endif
 		TFE_ZONE_END(wallQSort);
 
 		s32 flatCount = s_flatCount;
@@ -297,7 +347,6 @@ namespace TFE_Jedi
 
 		// Draw each wall segment in the sector.
 		TFE_ZONE_BEGIN(secDrawWalls, "Draw Walls");
-		N64_PROFILE_BEGIN(PZ_WALLS);
 		for (s32 i = 0; i < drawSegCnt; i++, wallSegment++)
 		{
 			RWall* srcWall = wallSegment->srcWall;
@@ -368,11 +417,9 @@ namespace TFE_Jedi
 #if N64_WALL_STRIPS
 		wall_flushStrip();
 #endif
-		N64_PROFILE_END(PZ_WALLS);
 		TFE_ZONE_END(secDrawWalls);
 
 		TFE_ZONE_BEGIN(secDrawFlats, "Draw Flats");
-		N64_PROFILE_BEGIN(PZ_FLATS);
 			// Draw flats
 			// Note: in the DOS code flat drawing functions are called through function pointers.
 			// Since the function pointers always seem to be the same, the functions are called directly in this code.
@@ -411,7 +458,6 @@ namespace TFE_Jedi
 #if N64_WALL_STRIPS
 		wall_flushStrip();	// sky columns
 #endif
-		N64_PROFILE_END(PZ_FLATS);
 		TFE_ZONE_END(secDrawFlats);
 
 		// Adjoins
@@ -475,9 +521,7 @@ namespace TFE_Jedi
 					if (srcWall->flags1 & WF1_ADJ_MID_TEX)
 					{
 						TFE_ZONE("Draw Transparent Walls");
-						N64_PROFILE_BEGIN(PZ_TRANS);
 						wall_drawTransparent(curAdjoinSeg, adjoinEdges);
-						N64_PROFILE_END(PZ_TRANS);
 					}
 				}
 			}
@@ -490,7 +534,6 @@ namespace TFE_Jedi
 
 		// Objects
 		TFE_ZONE_BEGIN(secDrawObjects, "Draw Objects");
-		N64_PROFILE_BEGIN(PZ_SPRITES);	// 3D objects are taken out below
 		const s32 objCount = cullObjects(s_curSector, s_objBuffer);
 		if (objCount > 0)
 		{
@@ -534,11 +577,15 @@ namespace TFE_Jedi
 				{
 					TFE_ZONE("Draw 3DO");
 
-					N64_PROFILE_END(PZ_SPRITES);
-					N64_PROFILE_BEGIN(PZ_MODELS);
+#ifdef __N64__
+					if (depthPrev)
+					{
+						depth_copyRest(depthPrev, depthCopyX0, depthCopyX1);
+						depthCopyX0 = s_minScreenX_Pixels;
+						depthCopyX1 = s_minScreenX_Pixels + s_width - 1;
+					}
+#endif
 					robj3d_draw(obj, obj->model);
-					N64_PROFILE_END(PZ_MODELS);
-					N64_PROFILE_BEGIN(PZ_SPRITES);
 				}
 				else if (type == OBJ_TYPE_FRAME)
 				{
@@ -551,7 +598,6 @@ namespace TFE_Jedi
 #if N64_WALL_STRIPS
 		wall_flushStrip();
 #endif
-		N64_PROFILE_END(PZ_SPRITES);
 		TFE_ZONE_END(secDrawObjects);
 
 		s_curSector->flags1 |= SEC_FLAGS1_RENDERED;

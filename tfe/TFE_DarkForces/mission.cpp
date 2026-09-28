@@ -37,7 +37,6 @@
 #include <TFE_Input/inputMapping.h>
 #ifdef __N64__
 #include "overlay_n64.h"
-#include "profile_n64.h"
 #endif
 
 using namespace TFE_Jedi;
@@ -551,12 +550,8 @@ namespace TFE_DarkForces
 				else if (s_missionMode == MISSION_MODE_MAIN)
 				{
 					updateScreensize();
-#ifdef __N64__
-					N64_PROFILE_BEGIN(PZ_WORLD);
-#endif
 					drawWorld(s_framebuffer, s_playerEye->sector, s_levelColorMap, s_lightSourceRamp);
 #ifdef __N64__
-					N64_PROFILE_END(PZ_WORLD);
 					// __N64__: the weapon and the HUD are drawn by the RDP (see overlay_n64.cpp).
 					Overlay_N64::begin();
 #endif

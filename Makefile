@@ -33,11 +33,6 @@ N64_WALL_STRIPS ?= 1
 N64_SHOW_FPS ?= 0
 TFE_DEFINES += -DN64_WALL_STRIPS=$(N64_WALL_STRIPS) -DN64_SHOW_FPS=$(N64_SHOW_FPS)
 
-# Performance: show the average milliseconds per frame spent in each part of the
-# frame (renderer, game logic, audio, ...) in the top right corner, see profile_n64.h.
-N64_PROFILE ?= 0
-TFE_DEFINES += -DN64_PROFILE=$(N64_PROFILE)
-
 ifneq ($(N64_START_LEVEL),)
 TFE_DEFINES += -DN64_START_LEVEL=\"$(N64_START_LEVEL)\"
 endif

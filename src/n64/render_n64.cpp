@@ -13,7 +13,6 @@
 #include <TFE_System/system.h>
 #include "debug_n64.h"
 #include "overlay_n64.h"
-#include "profile_n64.h"
 #include <cstdio>
 
 #include <libdragon.h>
@@ -111,14 +110,7 @@ namespace TFE_RenderBackend
 		}
 #endif
 
-#if N64_PROFILE
-		rdpq_text_print(nullptr, DEBUG_FONT_ID, 216, 16, Profile_N64::getText());
-#endif
-
 		rdpq_detach_show();
-#if N64_PROFILE
-		Profile_N64::frameShown();
-#endif
 		// TFE starts drawing the next frame into the same buffer right away.
 		rspq_wait();
 
