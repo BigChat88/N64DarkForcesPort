@@ -77,13 +77,13 @@ platforms, build them with `tools/vendor/bin/build-tools.sh` (see
 | A | Jump |
 | B (hold) | Run |
 | R (tap) | Use / open doors |
-| R + C-Up / R + C-Down | Look up / down |
+| R + C-Up / R + C-Down | Look up / down (holding C-Down before R keeps crouching and R stays "use") |
 | D-Left / D-Right | Previous / next weapon |
 | D-Down | Head lamp |
 | R + D-Up / D-Down / D-Left / D-Right | Goggles / gas mask / ice cleats / center view |
 | L | Automap (R + D-pad zooms and changes layer while it is shown) |
-| Start | Menu |
-| R + Start | PDA |
+| Start | Menu: abort mission, restart mission, cheats (god mode, all weapons, full map, ...) |
+| R + Start | PDA (stick/D-pad pan the map or scroll the briefing, C-Up/C-Down zoom, C-Left/C-Right map layer, L/R change page, Start or B close) |
 
 ## Building from source
 
@@ -108,7 +108,7 @@ With the game files in `gamedata/`:
 libdragon make -j8
 ```
 
-builds `darkforces64.z64` straight from source. Useful options (see the
+builds `output/darkforces64.z64` straight from source. Useful options (see the
 `Makefile`):
 
 | Option | Effect |

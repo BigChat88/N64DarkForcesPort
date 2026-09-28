@@ -21,6 +21,9 @@
 #ifdef __N64__
 #include <TFE_DarkForces/Landru/ldraw.h>
 #include "menunav_n64.h"
+#include <cstdio>
+#include <TFE_DarkForces/cheats.h>
+#include <TFE_DarkForces/mission.h>
 #endif
 
 using namespace TFE_Jedi;
@@ -52,7 +55,10 @@ namespace TFE_DarkForces
 		CONFIRM_STATE_ABORT,
 		CONFIRM_STATE_NEXT,
 		CONFIRM_STATE_QUIT,
-		CONFIRM_STATE_CONT
+		CONFIRM_STATE_CONT,
+#ifdef __N64__
+		CONFIRM_STATE_RESTART,
+#endif
 	};
 
 	enum EscapeButtons
@@ -126,6 +132,8 @@ namespace TFE_DarkForces
 	static s32 s_n64Selected = ESC_BTN_RETURN;
 	static s32 s_n64ConfirmSelected = CONFIRM_NO;
 	static s32 s_n64PrevConfirmState = CONFIRM_STATE_NONE;
+	static JBool s_n64CheatsOpen = JFALSE;		// the Cheats list is shown over the menu
+	static s32 s_n64CheatSelected = 0;
 	static EscapeMenuAction n64_updateSelection(EscapeMenuAction action);
 #endif
 
@@ -291,6 +299,7 @@ namespace TFE_DarkForces
 #ifdef __N64__
 		s_n64Selected = ESC_BTN_RETURN;
 		s_n64PrevConfirmState = CONFIRM_STATE_NONE;
+		s_n64CheatsOpen = JFALSE;
 #endif
 	}
 
@@ -426,15 +435,199 @@ namespace TFE_DarkForces
 	}
 
 #ifdef __N64__
-	// __N64__: hides the "Configuration" and "Quit to DOS" labels, the buttons are disabled.
-	// The menu is drawn again, grayed out, behind the confirmation dialogs, whose box
-	// covers the right end of the Configuration button.
-	static void n64_hideDisabledLabels(JBool dialogShown)
+	// __N64__: every label and message of the menu is printed with the UI font (the one the
+	// Cheats list uses), left aligned on the buttons: the menu images have "Configuration"
+	// and "Quit to DOS" buttons, which are reused as "Restart Mission" and "Cheats", and no
+	// images for their labels. The labels baked into the images are painted over.
+
+	// Menu palette colors.
+	static const u8 c_n64LabelRed         = 161;
+	static const u8 c_n64LabelRedShadow   = 184;
+	static const u8 c_n64LabelGreen       = 11;
+	static const u8 c_n64LabelGreenShadow = 121;
+	static const u8 c_n64LabelGray        = 40;
+	static const u8 c_n64LabelGrayShadow  = 72;
+	static const u8 c_n64DialogBox        = 78;
+	static const u8 c_n64DialogGreen      = 10;
+
+	// Left end of the labels, and left edge of the dialog box over the grayed out menu.
+	static const s32 c_n64LabelLeft  = 64;
+	static const s32 c_n64DialogLeft = 140;
+
+	// Prints the text with a one pixel shadow, clipped at clipX (print() does not clip).
+	static void n64_printShadowed(const char* text, s32 x, s32 y, u8 color, u8 shadow, s32 clipX)
 	{
-		const Vec2i config = c_escButtons[ESC_BTN_CONFIG];
-		eraseButtonLabel(s_emState.framebuffer, config.x, config.z + 4, config.x + (dialogShown ? 75 : 84), config.z + 14, config.z + 2);
-		const Vec2i quit = c_escButtons[ESC_BTN_QUIT];
-		eraseButtonLabel(s_emState.framebuffer, quit.x + 9, quit.z + 4, quit.x + 74, quit.z + 14, quit.z + 2);
+		enum { SAVE_W = 32, SAVE_H = 9 };
+		u8* fb = s_emState.framebuffer;
+		const JBool clip = clipX < 320;
+		u8 saved[SAVE_H][SAVE_W];
+		if (clip) { for (s32 r = 0; r < SAVE_H; r++) { memcpy(saved[r], &fb[(y + r) * 320 + clipX], SAVE_W); } }
+		print(text, x + 1, y + 1, shadow, fb);
+		print(text, x, y, color, fb);
+		if (clip) { for (s32 r = 0; r < SAVE_H; r++) { memcpy(&fb[(y + r) * 320 + clipX], saved[r], SAVE_W); } }
+	}
+
+	// Paints over the label of a button and prints a new one. Behind the confirmation
+	// dialogs the menu is grayed out and the dialog box covers the right end of the
+	// lower buttons.
+	static void n64_drawButtonLabel(s32 button, const char* label, JBool selected, JBool dialogShown)
+	{
+		const Vec2i pos = c_escButtons[button];
+		// The Return button is framed: its face is wider and its label lower.
+		const JBool framed = (button == ESC_BTN_RETURN);
+		const s32 x0 = framed ? pos.x - 3 : pos.x;
+		const s32 x1 = framed ? pos.x + 85 : pos.x + 84;
+		const s32 y  = framed ? pos.z + 5 : pos.z + 4;
+		const s32 eraseY0 = framed ? y - 1 : y;
+		const JBool covered = dialogShown && button != ESC_BTN_ABORT;
+		eraseButtonLabel(s_emState.framebuffer, x0, eraseY0, covered ? c_n64DialogLeft - 1 : x1, eraseY0 + 10, pos.z + 2);
+
+		const s32 x = c_n64LabelLeft;
+		const s32 clipX = covered ? c_n64DialogLeft : 320;
+		if (dialogShown)   { n64_printShadowed(label, x, y, c_n64LabelGray, c_n64LabelGrayShadow, clipX); }
+		else if (selected) { n64_printShadowed(label, x, y, c_n64LabelGreen, c_n64LabelGreenShadow, clipX); }
+		else               { n64_printShadowed(label, x, y, c_n64LabelRed, c_n64LabelRedShadow, clipX); }
+	}
+
+	static void n64_drawButtonLabels(JBool dialogShown)
+	{
+		const char* labels[ESC_BTN_COUNT] =
+		{
+			s_levelComplete ? "NEXT MISSION" : "ABORT MISSION",
+			"RESTART MISSION",
+			"CHEATS",
+			"RETURN TO GAME",
+		};
+		for (s32 i = 0; i < ESC_BTN_COUNT; i++)
+		{
+			const JBool selected = s_emState.buttonHover && s_emState.buttonPressed == i;
+			n64_drawButtonLabel(i, labels[i], selected, dialogShown);
+		}
+	}
+
+	// Replaces the message of a confirmation dialog, centered line by line.
+	static void n64_drawDialogText(const char* const* lines, s32 count, u8 color)
+	{
+		u8* fb = s_emState.framebuffer;
+		drawColoredQuad(152, 71, 143, 46, c_n64DialogBox, fb);
+		s32 y = 94 - count * 9 / 2;
+		for (s32 i = 0; i < count; i++, y += 9)
+		{
+			print(lines[i], 224 - getStringPixelLength(lines[i]) / 2, y, color, fb);
+		}
+	}
+
+	// The No / Yes buttons. The dialog images have a red frame baked around the default
+	// button (No to abort, Yes for the next mission), so the frames of both buttons are
+	// painted again: red around the selected one. The face is brighter when selected.
+	static void n64_drawConfirmButton(const Vec4i& rect, const char* label, JBool selected, u8 frameColor)
+	{
+		u8* fb = s_emState.framebuffer;
+		// The rectangle bounds (of the face) are inclusive, the frame is 2 pixels out.
+		const s32 x0 = rect.x - 2, y0 = rect.y - 2, x1 = rect.z + 2, y1 = rect.w + 2;
+		const u8 frame = selected ? 165 : frameColor;
+		drawHorizontalLine(x0, x1, y0, frame, fb);
+		drawHorizontalLine(x0, x1, y1, frame, fb);
+		drawVerticalLine(y0, y1, x0, frame, fb);
+		drawVerticalLine(y0, y1, x1, frame, fb);
+		drawColoredQuad(rect.x, rect.y, rect.z - rect.x + 1, rect.w - rect.y + 1, selected ? 12 : 14, fb);
+		const s32 x = (rect.x + rect.z + 1 - getStringPixelLength(label)) / 2;
+		print(label, x, rect.y + 2, c_n64DialogGreen, fb);
+	}
+
+	// The classic cheats, applied when selected instead of being typed (like the Cheats
+	// menu of the N64 Doom port).
+	struct N64Cheat
+	{
+		const char* name;
+		CheatID id;
+	};
+	static const N64Cheat c_n64Cheats[] =
+	{
+		{ "GOD MODE",           CHEAT_LAIMLAME },
+		{ "ALL WEAPONS",        CHEAT_LAPOSTAL },
+		{ "ALL ITEMS AND KEYS", CHEAT_LAUNLOCK },
+		{ "MAX EVERYTHING",     CHEAT_LAMAXOUT },
+		{ "FULL MAP",           CHEAT_LACDS },
+		{ "SUPERCHARGE",        CHEAT_LARANDY },
+		{ "FREEZE ENEMIES",     CHEAT_LAREDLITE },
+		{ "NO HEIGHT CHECKS",   CHEAT_LAPOGO },
+		{ "BUG MODE",           CHEAT_LABUG },
+		{ "SKIP MISSION",       CHEAT_LASKIP },
+	};
+	enum { N64_CHEAT_COUNT = sizeof(c_n64Cheats) / sizeof(c_n64Cheats[0]) };
+
+	// A panel in the style of the menu dialogs (there is no image tall enough for the list).
+	static void n64_drawCheats()
+	{
+		u8* fb = s_emState.framebuffer;
+		const s32 x0 = 40, y0 = 24, w = 240, h = 152;
+		drawColoredQuad(x0, y0, w, h, 71, fb);					// metal
+		drawHorizontalLine(x0, x0 + w - 1, y0, 68, fb);			// light edges
+		drawVerticalLine(y0, y0 + h - 1, x0, 68, fb);
+		drawHorizontalLine(x0, x0 + w - 1, y0 + h - 1, 74, fb);	// dark edges
+		drawVerticalLine(y0, y0 + h - 1, x0 + w - 1, 74, fb);
+		drawColoredQuad(x0, y0 + 14, 3, h - 14, 166, fb);		// red trim, like the dialogs
+		drawColoredQuad(x0 + 8, y0 + 16, w - 16, h - 24, c_n64DialogBox, fb);
+
+		const char* title = "CHEATS";
+		const s32 titleX = x0 + (w - getStringPixelLength(title)) / 2;
+		print(title, titleX + 1, y0 + 5, c_n64LabelRedShadow, fb);
+		print(title, titleX, y0 + 4, c_n64LabelRed, fb);
+
+		for (s32 i = 0; i < N64_CHEAT_COUNT; i++)
+		{
+			const s32 y = y0 + 22 + i * 12;
+			const JBool selected = (i == s_n64CheatSelected);
+			if (selected) { drawColoredQuad(x0 + 10, y - 2, w - 20, 11, 74, fb); }
+			print(c_n64Cheats[i].name, x0 + 16, y, selected ? c_n64LabelGreen : c_n64LabelRed, fb);
+			// The code that types the cheat on the PC.
+			char code[16];
+			snprintf(code, sizeof(code), "LA%s", cheat_getStringFromID(c_n64Cheats[i].id));
+			print(code, x0 + w - 16 - getStringPixelLength(code), y, selected ? c_n64LabelGray : c_n64LabelGrayShadow, fb);
+		}
+	}
+
+	static void n64_drawMenu()
+	{
+		u8* fb = s_emState.framebuffer;
+		if (s_emState.confirmState == CONFIRM_STATE_NONE)
+		{
+			blitDeltaFrame(&s_emState.escMenuFrames[0], 0, 0, fb);
+			// The highlight frames light the button LED (their labels are painted over).
+			if (s_emState.buttonHover && s_emState.buttonPressed >= 0)
+			{
+				const s32 highlightIndices[] = { 1, 7, 9, 5 };
+				blitDeltaFrame(&s_emState.escMenuFrames[highlightIndices[s_emState.buttonPressed]], 0, 0, fb);
+			}
+			n64_drawButtonLabels(JFALSE);
+			if (s_n64CheatsOpen) { n64_drawCheats(); }
+			return;
+		}
+
+		const JBool next = (s_emState.confirmState == CONFIRM_STATE_NEXT);
+		blitDeltaFrame(&s_emState.confirmMenuFrames[next ? CONFIRM_NEXT_BG : CONFIRM_ABORT_BG], 0, 0, fb);
+		n64_drawButtonLabels(JTRUE);
+		if (next)
+		{
+			const char* lines[] = { "MISSION GOALS", "COMPLETE", "", "CONTINUE TO NEXT", "MISSION?" };
+			n64_drawDialogText(lines, 5, c_n64DialogGreen);
+		}
+		else if (s_emState.confirmState == CONFIRM_STATE_RESTART)
+		{
+			const char* lines[] = { "RESTART MISSION?" };
+			n64_drawDialogText(lines, 1, c_n64LabelRed);
+		}
+		else
+		{
+			const char* lines[] = { "MISSION GOALS", "INCOMPLETE", "", "ABORT MISSION?" };
+			n64_drawDialogText(lines, 4, c_n64LabelRed);
+		}
+		// The controller selection: buttonPressed is cleared when a button is activated,
+		// which would show No selected while the next screen loads.
+		const JBool yes = (s_n64ConfirmSelected == CONFIRM_YES);
+		n64_drawConfirmButton(s_confirmButtonRange[CONFIRM_YES], "YES", yes, 79);
+		n64_drawConfirmButton(s_confirmButtonRange[CONFIRM_NO], "NO", !yes, 78);
 	}
 #endif
 
@@ -459,13 +652,13 @@ namespace TFE_DarkForces
 				hud_drawElementToScreen(s_emState.framebufferCopy, drawRect, 0, 0, s_emState.framebuffer);
 			}
 
+#ifdef __N64__
+			n64_drawMenu();
+#else
 			if (s_emState.confirmState == CONFIRM_STATE_NONE)
 			{
 				// Draw the menu background.
 				blitDeltaFrame(&s_emState.escMenuFrames[0], 0, 0, s_emState.framebuffer);
-#ifdef __N64__
-				n64_hideDisabledLabels(JFALSE);
-#endif
 
 				if (s_levelComplete)
 				{
@@ -489,18 +682,12 @@ namespace TFE_DarkForces
 			else if (s_emState.confirmState == CONFIRM_STATE_ABORT)
 			{
 				blitDeltaFrame(&s_emState.confirmMenuFrames[CONFIRM_ABORT_BG], 0, 0, s_emState.framebuffer);
-#ifdef __N64__
-				n64_hideDisabledLabels(JTRUE);
-#endif
 				blitDeltaFrame(&s_emState.confirmMenuFrames[s_emState.buttonPressed == CONFIRM_YES ? CONFIRM_NEXT_YESBTN_DOWN : CONFIRM_NEXT_YESBTN_UP], 0, 0, s_emState.framebuffer);
 				blitDeltaFrame(&s_emState.confirmMenuFrames[s_emState.buttonPressed == CONFIRM_NO ? CONFIRM_NEXT_NOBTN_DOWN : CONFIRM_NEXT_NOBTN_UP], 0, 0, s_emState.framebuffer);
 			}
 			else if (s_emState.confirmState == CONFIRM_STATE_NEXT)
 			{
 				blitDeltaFrame(&s_emState.confirmMenuFrames[CONFIRM_NEXT_BG], 0, 0, s_emState.framebuffer);
-#ifdef __N64__
-				n64_hideDisabledLabels(JTRUE);
-#endif
 				blitDeltaFrame(&s_emState.confirmMenuFrames[s_emState.buttonPressed == CONFIRM_YES ? CONFIRM_NEXT_YESBTN_DOWN : CONFIRM_NEXT_YESBTN_UP], 0, 0, s_emState.framebuffer);
 				blitDeltaFrame(&s_emState.confirmMenuFrames[s_emState.buttonPressed == CONFIRM_NO ? CONFIRM_NEXT_NOBTN_DOWN : CONFIRM_NEXT_NOBTN_UP], 0, 0, s_emState.framebuffer);
 			}
@@ -510,7 +697,7 @@ namespace TFE_DarkForces
 				blitDeltaFrame(&s_emState.confirmMenuFrames[s_emState.buttonPressed == CONFIRM_YES ? CONFIRM_QUIT_YESBTN_DOWN : CONFIRM_QUIT_YESBTN_UP], 0, 0, s_emState.framebuffer);
 				blitDeltaFrame(&s_emState.confirmMenuFrames[s_emState.buttonPressed == CONFIRM_NO ? CONFIRM_QUIT_NOBTN_DOWN : CONFIRM_QUIT_NOBTN_UP], 0, 0, s_emState.framebuffer);
 			}
-
+#endif
 			// Draw the mouse.
 #ifdef __N64__	// __N64__: this path ignored drawMouse, and the N64 menu has no cursor.
 			if (drawMouse)
@@ -651,10 +838,19 @@ namespace TFE_DarkForces
 				s_emState.confirmState = s_levelComplete ? CONFIRM_STATE_NEXT : CONFIRM_STATE_ABORT;
 				break;
 			case ESC_BTN_CONFIG:
+#ifdef __N64__
+				s_emState.confirmState = CONFIRM_STATE_RESTART;
+#else
 				action = ESC_CONFIG;
+#endif
 				break;
 			case ESC_BTN_QUIT:
+#ifdef __N64__
+				s_n64CheatsOpen = JTRUE;
+				s_n64CheatSelected = 0;
+#else
 				s_emState.confirmState = CONFIRM_STATE_QUIT;
+#endif
 				break;
 			case ESC_BTN_RETURN:
 				action = ESC_RETURN;
@@ -689,6 +885,12 @@ namespace TFE_DarkForces
 					{
 						action = ESC_ABORT_OR_NEXT;
 					}
+#ifdef __N64__
+					else if (s_emState.confirmState == CONFIRM_STATE_RESTART)
+					{
+						action = ESC_RESTART;
+					}
+#endif
 					else
 					{
 						action = ESC_QUIT;
@@ -719,6 +921,23 @@ namespace TFE_DarkForces
 		const JBool right = (nav & MenuNav_N64::NAV_RIGHT) != 0;
 
 		s32 pressed = -1;
+		if (s_n64CheatsOpen)
+		{
+			if (up)   { s_n64CheatSelected = (s_n64CheatSelected + N64_CHEAT_COUNT - 1) % N64_CHEAT_COUNT; }
+			if (down) { s_n64CheatSelected = (s_n64CheatSelected + 1) % N64_CHEAT_COUNT; }
+			if (back) { s_n64CheatsOpen = JFALSE; }
+			else if (select)
+			{
+				// Back to the game, which runs the cheat on its next frame.
+				mission_queueCheat(c_n64Cheats[s_n64CheatSelected].id);
+				s_n64CheatsOpen = JFALSE;
+				s_emState.escMenuOpen = JFALSE;
+				return ESC_RETURN;
+			}
+			s_emState.buttonPressed = s_n64Selected;
+			s_emState.buttonHover = JTRUE;
+			return action;
+		}
 		if (s_emState.confirmState == CONFIRM_STATE_NONE)
 		{
 			if (back)
@@ -726,11 +945,15 @@ namespace TFE_DarkForces
 				s_emState.escMenuOpen = JFALSE;
 				return ESC_RETURN;
 			}
-			// Configuration and Quit are disabled: only Abort (or Next Mission) and Return remain.
-			if (up || down)
-			{
-				s_n64Selected = (s_n64Selected == ESC_BTN_ABORT) ? ESC_BTN_RETURN : ESC_BTN_ABORT;
-			}
+			// Abort (or Next Mission), Restart Mission (the Configuration button), Cheats
+			// (the Quit button) and Return.
+			static const s32 c_order[] = { ESC_BTN_ABORT, ESC_BTN_CONFIG, ESC_BTN_QUIT, ESC_BTN_RETURN };
+			const s32 count = (s32)TFE_ARRAYSIZE(c_order);
+			s32 index = 0;
+			while (index < count - 1 && c_order[index] != s_n64Selected) { index++; }
+			if (up)   { index = (index + count - 1) % count; }
+			if (down) { index = (index + 1) % count; }
+			s_n64Selected = c_order[index];
 			s_emState.buttonPressed = s_n64Selected;
 			if (select) { pressed = s_n64Selected; }
 		}

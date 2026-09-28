@@ -5,8 +5,15 @@ include $(N64_INST)/include/n64.mk
 ROM_NAME = darkforces64
 TFE = tfe
 
-all: $(ROM_NAME).z64
+# The ROM is built next to the Makefile (n64.mk's %.z64 rule) and copied to output/,
+# where build.cmd / tools/pack_rom.py also write it.
+all: output/$(ROM_NAME).z64
 .PHONY: all
+
+output/$(ROM_NAME).z64: $(ROM_NAME).z64
+	@mkdir -p output
+	@echo "    [COPY] $@"
+	cp $< $@
 
 # The Force Engine is compiled with the Amiga low-spec code paths enabled
 # (__AMIGA__), plus __N64__ to replace the few spots that call AmigaOS APIs.
@@ -240,7 +247,7 @@ engine: $(ENGINE_ELF) $(INTRO_SPRITES)
 .PHONY: engine
 
 clean:
-	rm -rf $(BUILD_DIR) *.z64
+	rm -rf $(BUILD_DIR) *.z64 output/$(ROM_NAME).z64
 .PHONY: clean
 
 -include $(shell find $(BUILD_DIR) -name '*.d' 2>/dev/null)

@@ -14,6 +14,9 @@ enum EscapeMenuAction
 	ESC_ABORT_OR_NEXT,	// abort the current mission or move on to the next.
 	ESC_QUIT,			// quit the game.
 	ESC_CONFIG,			// configuration menu.
+#ifdef __N64__
+	ESC_RESTART,		// restart the current mission.
+#endif
 	ESC_COUNT
 };
 

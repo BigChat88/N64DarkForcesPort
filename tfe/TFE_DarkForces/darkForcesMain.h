@@ -25,4 +25,8 @@ namespace TFE_DarkForces
 	};
 
 	extern void saveLevelStatus();
+#ifdef __N64__
+	// The current mission is launched again once it exits (escape menu "Restart Mission").
+	extern void requestMissionRestart();
+#endif
 }

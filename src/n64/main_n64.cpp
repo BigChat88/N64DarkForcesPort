@@ -20,6 +20,7 @@
 #include "menunav_n64.h"
 #include "intro_n64.h"
 #include <TFE_DarkForces/automap.h>
+#include <TFE_DarkForces/GameUI/pda.h>
 
 #include <libdragon.h>
 
@@ -216,20 +217,24 @@ static void updateInput(bool inGame)
 	const bool mapShown = TFE_DarkForces::s_drawAutomap;
 	const bool mapR = r && mapShown;	// R + D-pad controls the automap while it is shown
 	const bool itemR = r && !mapShown;
+	// C-down pressed before R keeps crouching and leaves R free for "use";
+	// R pressed before C-down looks down instead.
+	static bool s_crouchHeld = false;
+	s_crouchHeld = inGame && in.btn.c_down && (s_crouchHeld || !in.btn.r);
 	setVirtualKey(VK_FIRE,         n && in.btn.z);
 	setVirtualKey(VK_FIRE_SECOND,  r && in.btn.z);
 	setVirtualKey(VK_MENU,         n && in.btn.start);
 	// The PDA pauses the game, so it must also close from "menu" mode.
 	setVirtualKey(VK_PDA,          in.btn.r && in.btn.start);
 	setVirtualKey(VK_JUMP,         inGame && in.btn.a);
-	setVirtualKey(VK_CROUCH,       n && in.btn.c_down);
+	setVirtualKey(VK_CROUCH,       s_crouchHeld);
 	setVirtualKey(VK_STRAFE_LEFT,  inGame && in.btn.c_left);
 	setVirtualKey(VK_STRAFE_RIGHT, inGame && in.btn.c_right);
 	setVirtualKey(VK_WEAPON_PREV,  n && in.btn.d_left);
 	setVirtualKey(VK_WEAPON_NEXT,  n && in.btn.d_right);
 	setVirtualKey(VK_HEADLAMP,     n && in.btn.d_down);
 	setVirtualKey(VK_LOOK_UP,      r && in.btn.c_up);
-	setVirtualKey(VK_LOOK_DOWN,    r && in.btn.c_down);
+	setVirtualKey(VK_LOOK_DOWN,    r && in.btn.c_down && !s_crouchHeld);
 	setVirtualKey(VK_MAP_ZOOM_IN,  mapR && in.btn.d_up);
 	setVirtualKey(VK_MAP_ZOOM_OUT, mapR && in.btn.d_down);
 	setVirtualKey(VK_MAP_LAYER_DOWN, mapR && in.btn.d_left);
@@ -246,7 +251,7 @@ static void updateInput(bool inGame)
 	static bool s_rCombined = false;
 	static s32 s_usePulse = 0;
 	if (in.btn.r && !s_prevR) { s_rCombined = false; }
-	if (in.btn.r && (in.btn.z || in.btn.start || in.btn.c_up || in.btn.c_down ||
+	if (in.btn.r && (in.btn.z || in.btn.start || in.btn.c_up || (in.btn.c_down && !s_crouchHeld) ||
 		in.btn.d_up || in.btn.d_down || in.btn.d_left || in.btn.d_right))
 	{
 		s_rCombined = true;
@@ -273,10 +278,36 @@ static void updateInput(bool inGame)
 		return;
 	}
 
-	// Menus (agent menu, briefings, PDA, escape menu) are mouse driven:
-	// the stick moves a virtual cursor and A clicks.
 	TFE_Input::setAxis(AXIS_RIGHT_X, 0.0f);
 	TFE_Input::setAxis(AXIS_LEFT_Y, 0.0f);
+
+	// The PDA is driven with the controller, without the cursor, through the keys it
+	// handles on the PC: the stick or D-pad pans the map (scrolls the briefing),
+	// C-up/C-down zoom, C-left/C-right change the map layer and L/R change the page.
+	// Start or B closes it.
+	const bool pda = TFE_DarkForces::pda_isOpen();
+	const s32 c_pdaStick = 30;
+	setKey(KEY_UP,           pda && (in.btn.d_up    || in.stick_y >  c_pdaStick));
+	setKey(KEY_DOWN,         pda && (in.btn.d_down  || in.stick_y < -c_pdaStick));
+	setKey(KEY_LEFT,         pda && (in.btn.d_left  || in.stick_x < -c_pdaStick));
+	setKey(KEY_RIGHT,        pda && (in.btn.d_right || in.stick_x >  c_pdaStick));
+	setKey(KEY_EQUALS,       pda && in.btn.c_up);
+	setKey(KEY_MINUS,        pda && in.btn.c_down);
+	setKey(KEY_LEFTBRACKET,  pda && in.btn.c_left);
+	setKey(KEY_RIGHTBRACKET, pda && in.btn.c_right);
+	// Space is the next page, Shift + Space the previous one.
+	setKey(KEY_LSHIFT,       pda && in.btn.l);
+	setKey(KEY_SPACE,        pda && (in.btn.l || in.btn.r));
+	if (pda)
+	{
+		TFE_Input::setMouseButtonUp(MBUTTON_LEFT);
+		setKey(KEY_ESCAPE, in.btn.start || in.btn.b);
+		setKey(KEY_RETURN, false);
+		return;
+	}
+
+	// The other menus (agent menu, briefings, escape menu) are mouse driven:
+	// the stick moves a virtual cursor and A clicks.
 	s_cursorX += stickToAxis(in.stick_x) * 4.0f;
 	s_cursorY -= stickToAxis(in.stick_y) * 4.0f;
 	if (s_cursorX < 0.0f) { s_cursorX = 0.0f; }

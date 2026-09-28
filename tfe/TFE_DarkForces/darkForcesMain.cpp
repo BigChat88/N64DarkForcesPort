@@ -213,6 +213,9 @@ namespace TFE_DarkForces
 	};
 	static RunGameState   s_runGameState = {};
 	static SharedGameState s_sharedState = {};
+#ifdef __N64__
+	static JBool s_restartMission = JFALSE;
+#endif
 				
 	/////////////////////////////////////////////
 	// Forward Declarations
@@ -430,6 +433,13 @@ namespace TFE_DarkForces
 			agent_updateAgentSavedData();
 		}
 	}
+
+#ifdef __N64__
+	void requestMissionRestart()
+	{
+		s_restartMission = JTRUE;
+	}
+#endif
 
 	bool DarkForces::canSave()
 	{
@@ -661,6 +671,23 @@ namespace TFE_DarkForces
 
 					// TFE
 					reticle_enable(false);
+
+#ifdef __N64__
+					if (s_restartMission)
+					{
+						// cutsceneIndex still points at the mission, so startNextMode() launches it
+						// again, with the inventory the agent had when the level started. The level
+						// data must be freed first, since the new mission allocates from it.
+						s_restartMission = JFALSE;
+						region_clear(s_levelRegion);
+						bitmap_clearLevelData();
+						bitmap_setAllocator(s_gameRegion);
+						level_freeAllAssets();
+						TFE_A11Y::clearCaptions();
+						startNextMode();
+						break;
+					}
+#endif
 
 					if (!s_levelComplete)
 					{

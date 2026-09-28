@@ -9,6 +9,9 @@
 #include <TFE_Jedi/Level/rsector.h>
 #include <TFE_Jedi/Level/robject.h>
 #include <TFE_Jedi/Task/task.h>
+#ifdef __N64__
+#include "cheats.h"
+#endif
 
 #define CONV_6bitTo8bit(x) (((x)<<2) | ((x)>>4))
 
@@ -27,6 +30,10 @@ namespace TFE_DarkForces
 	void mission_setLoadMissionTask(Task* task);
 	void mission_exitLevel();
 	void mission_pause(JBool pause);
+#ifdef __N64__
+	// The cheat runs on the next game frame, once the escape menu has closed.
+	void mission_queueCheat(CheatID cheatId);
+#endif
 
 	void setScreenFxLevels(s32 healthFx, s32 shieldFx, s32 flashFx);
 	void disableNightvisionInternal();

@@ -2481,6 +2481,36 @@ namespace RClassic_Fixed
 		}
 		return &s_strip[y0][c];
 	}
+
+	// Signs use the drawColumnS_*() functions (no texture height mask), which are also
+	// used for sprites. A sign lies over the wall column just drawn into the strip, so it
+	// is drawn there too: writing it straight to the framebuffer, after writing out the
+	// strip for every column, made the frame rate collapse when a sign (a switch) filled
+	// the screen. Returns false when the column must be drawn to the framebuffer (sprites,
+	// which are drawn after the strip is written out, or spans outside the wall column).
+	template <bool Lit, bool Trans>
+	static bool strip_drawSignColumn()
+	{
+		if (s_yPixelCount <= 0) { return true; }
+		u8* out = strip_transColumn(s_yPixelCount);
+		if (!out) { return false; }
+
+		// Locals: the byte stores could alias the globals, which would be reloaded every pixel.
+		fixed16_16 vCoordFixed = s_vCoordFixed;
+		const fixed16_16 step = s_vCoordStep;
+		const u8* tex = s_texImage;
+		const u8* light = s_columnLight;
+		s32 v = floor16(vCoordFixed);
+		for (s32 i = s_yPixelCount - 1; i >= 0; i--)
+		{
+			const u8 c = tex[v];
+			vCoordFixed += step;
+			v = floor16(vCoordFixed);
+			if (Trans && !c) { continue; }
+			out[i * STRIP_WIDTH] = Lit ? light[c] : c;
+		}
+		return true;
+	}
 #endif
 
 	void drawColumn_Fullbright()
@@ -2618,7 +2648,7 @@ namespace RClassic_Fixed
 	void drawColumnS_Fullbright()
 	{
 #if N64_WALL_STRIPS
-		wall_flushStrip();
+		if (strip_drawSignColumn<false, false>()) { return; }
 #endif
 		fixed16_16 vCoordFixed = s_vCoordFixed;
 		u8* tex = s_texImage;
@@ -2639,7 +2669,7 @@ namespace RClassic_Fixed
 	void drawColumnS_Lit()
 	{
 #if N64_WALL_STRIPS
-		wall_flushStrip();
+		if (strip_drawSignColumn<true, false>()) { return; }
 #endif
 		fixed16_16 vCoordFixed = s_vCoordFixed;
 		u8* tex = s_texImage;
@@ -2660,7 +2690,7 @@ namespace RClassic_Fixed
 	void drawColumnS_Fullbright_Trans()
 	{
 #if N64_WALL_STRIPS
-		wall_flushStrip();
+		if (strip_drawSignColumn<false, true>()) { return; }
 #endif
 		fixed16_16 vCoordFixed = s_vCoordFixed;
 		u8* tex = s_texImage;
@@ -2818,7 +2848,7 @@ namespace RClassic_Fixed
 	void drawColumnS_Lit_Trans()
 	{
 #if N64_WALL_STRIPS
-		wall_flushStrip();
+		if (strip_drawSignColumn<true, true>()) { return; }
 #endif
 		fixed16_16 vCoordFixed = s_vCoordFixed;
 		u8* tex = s_texImage;

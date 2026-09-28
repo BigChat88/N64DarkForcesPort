@@ -318,7 +318,9 @@ namespace TFE_DarkForces
 		// Doing that we need to restore the transparent color before blitting the mouse cursor, otherwise its black edges will 
 		// show up incorrectly.
 		screenDraw_setTransColor(0);
+#ifndef __N64__	// __N64__: the PDA is driven with the controller, there is no cursor.
 		menu_blitCursorScaled(s_cursorPos.x, s_cursorPos.z, vfb_getCpuBuffer());
+#endif
 		vfb_swap();
 	}
 	

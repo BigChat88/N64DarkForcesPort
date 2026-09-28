@@ -133,6 +133,13 @@ namespace TFE_DarkForces
 	static Tick s_loadingScreenDelta;
 	static CheatID s_queuedCheatID = CHEAT_NONE;
 
+#ifdef __N64__
+	void mission_queueCheat(CheatID cheatId)
+	{
+		s_queuedCheatID = cheatId;
+	}
+#endif
+
 	void console_cheat(const ConsoleArgList& args)
 	{
 		if (args.size() < 2) { return; }
@@ -579,8 +586,14 @@ namespace TFE_DarkForces
 					blankScreen();
 #endif
 				}
+#ifdef __N64__
+				else if (action == ESC_ABORT_OR_NEXT || action == ESC_RESTART)
+				{
+					if (action == ESC_RESTART) { requestMissionRestart(); }
+#else
 				else if (action == ESC_ABORT_OR_NEXT)
 				{
+#endif
 					s_exitLevel = JTRUE;
 					TFE_Input::clearAccumulatedMouseMove();
 					task_pause(JFALSE);
