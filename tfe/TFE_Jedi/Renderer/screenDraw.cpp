@@ -6,6 +6,9 @@
 #include <TFE_Jedi/Renderer/RClassic_Fixed/rlightingFixed.h>
 
 #include "screenDraw.h"
+#ifdef __N64__
+#include "overlay_n64.h"
+#endif
 
 namespace TFE_Jedi
 {
@@ -424,6 +427,10 @@ namespace TFE_Jedi
 			screenGPU_blitTextureLit(texture, rect, intToFixed16(x0), intToFixed16(y0), 31);
 			return;
 		}
+#ifdef __N64__
+		// __N64__: the weapon and the HUD are drawn by the RDP, see overlay_n64.cpp.
+		if (Overlay_N64::addTexture(texture, rect, x0, y0, nullptr, s_transColor, forceTransparency, forceOpaque)) { return; }
+#endif
 		s32 x1 = x0 + texture->width  - 1;
 		s32 y1 = y0 + texture->height - 1;
 
@@ -480,6 +487,9 @@ namespace TFE_Jedi
 			screenGPU_blitTextureLit(texture, rect, intToFixed16(x0), intToFixed16(y0), lightLevel);
 			return;
 		}
+#ifdef __N64__
+		if (Overlay_N64::addTexture(texture, rect, x0, y0, atten, s_transColor, forceTransparency, false)) { return; }
+#endif
 		s32 x1 = x0 + texture->width  - 1;
 		s32 y1 = y0 + texture->height - 1;
 

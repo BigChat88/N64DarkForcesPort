@@ -18,6 +18,9 @@
 #include <TFE_Jedi/Level/rtexture.h>
 #include <TFE_Jedi/Level/roffscreenBuffer.h>
 #include <cstring>
+#ifdef __N64__
+#include "overlay_n64.h"
+#endif
 
 #define TFE_CONVERT_CAPS 0
 #if TFE_CONVERT_CAPS
@@ -1160,6 +1163,10 @@ namespace TFE_DarkForces
 
 	void hud_drawElementToScreen(OffScreenBuffer* elem, ScreenRect* rect, s32 x0, s32 y0, u8* framebuffer)
 	{
+#ifdef __N64__
+		// __N64__: drawn by the RDP, see overlay_n64.cpp.
+		if (Overlay_N64::addImage(elem->image, elem->width, elem->height, rect, x0, y0, (elem->flags & OBF_TRANS) != 0)) { return; }
+#endif
 		s32 x1 = x0 + elem->width - 1;
 		u8* image = elem->image;
 		s32 y1 = y0 + elem->height - 1;

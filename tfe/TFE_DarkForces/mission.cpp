@@ -35,6 +35,10 @@
 #include <TFE_Settings/settings.h>
 #include <TFE_System/system.h>
 #include <TFE_Input/inputMapping.h>
+#ifdef __N64__
+#include "overlay_n64.h"
+#include "profile_n64.h"
+#endif
 
 using namespace TFE_Jedi;
 using namespace TFE_Input;
@@ -547,7 +551,15 @@ namespace TFE_DarkForces
 				else if (s_missionMode == MISSION_MODE_MAIN)
 				{
 					updateScreensize();
+#ifdef __N64__
+					N64_PROFILE_BEGIN(PZ_WORLD);
+#endif
 					drawWorld(s_framebuffer, s_playerEye->sector, s_levelColorMap, s_lightSourceRamp);
+#ifdef __N64__
+					N64_PROFILE_END(PZ_WORLD);
+					// __N64__: the weapon and the HUD are drawn by the RDP (see overlay_n64.cpp).
+					Overlay_N64::begin();
+#endif
 					weapon_draw(s_framebuffer, (DrawRect*)vfb_getScreenRect(VFB_RECT_UI));
 					handleVisionFx();
 				}
@@ -558,12 +570,23 @@ namespace TFE_DarkForces
 				handleGeneralInput();
 				if (s_drawAutomap)
 				{
+#ifdef __N64__
+					Overlay_N64::flatten();	// the map is drawn over the weapon
+#endif
 					automap_draw(s_framebuffer);
 				}
 				hud_drawAndUpdate(s_framebuffer);
 				hud_drawMessage(s_framebuffer);
 				handlePaletteFx();
 			}
+#ifdef __N64__
+			Overlay_N64::end();
+			// The menus are drawn over the weapon and the HUD.
+			if (escapeMenu_isOpen() || pda_isOpen())
+			{
+				Overlay_N64::flatten();
+			}
+#endif
 			
 			// Move this out of handleGeneralInput so that the HUD is properly copied.
 			if (escapeMenu_isOpen())
@@ -628,6 +651,9 @@ namespace TFE_DarkForces
 			}
 			else if (inputMapping_getActionState(IADF_MENU_TOGGLE) == STATE_PRESSED && !s_playerDying && !TFE_FrontEndUI::isConsoleOpen())
 			{
+#ifdef __N64__
+				Overlay_N64::flatten();	// the menu keeps a copy of the framebuffer as its background
+#endif
 				escapeMenu_open(s_framebuffer, s_basePalette);
 				s_gamePaused = JTRUE;
 				task_pause(s_gamePaused, s_mainTask);

@@ -19,6 +19,7 @@
 #include "savefs_n64.h"
 #include "menunav_n64.h"
 #include "intro_n64.h"
+#include "profile_n64.h"
 #include <TFE_DarkForces/automap.h>
 #include <TFE_DarkForces/GameUI/pda.h>
 
@@ -432,10 +433,16 @@ int main(void)
 		TFE_System::update();
 		TFE_SaveSystem::update();
 		s_curGame->loopGame();
+		N64_PROFILE_BEGIN(PZ_TASKS);
 		const bool endInputFrame = TFE_Jedi::task_run() != 0;
+		N64_PROFILE_END(PZ_TASKS);
+		N64_PROFILE_BEGIN(PZ_AUDIO);
 		TFE_Audio::n64_update();
+		N64_PROFILE_END(PZ_AUDIO);
 
+		N64_PROFILE_BEGIN(PZ_SWAP);
 		TFE_RenderBackend::swap(true);
+		N64_PROFILE_END(PZ_SWAP);
 
 		if (endInputFrame)
 		{

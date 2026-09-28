@@ -16,6 +16,7 @@
 #include "rclassicFixedSharedState.h"
 #include "robj3d_fixed/robj3dFixed.h"
 #include "../rcommon.h"
+#include "profile_n64.h"
 #ifdef __AMIGA__
 #define s_width (320)
 #define s_height (200)
@@ -296,6 +297,7 @@ namespace TFE_Jedi
 
 		// Draw each wall segment in the sector.
 		TFE_ZONE_BEGIN(secDrawWalls, "Draw Walls");
+		N64_PROFILE_BEGIN(PZ_WALLS);
 		for (s32 i = 0; i < drawSegCnt; i++, wallSegment++)
 		{
 			RWall* srcWall = wallSegment->srcWall;
@@ -366,9 +368,11 @@ namespace TFE_Jedi
 #if N64_WALL_STRIPS
 		wall_flushStrip();
 #endif
+		N64_PROFILE_END(PZ_WALLS);
 		TFE_ZONE_END(secDrawWalls);
 
 		TFE_ZONE_BEGIN(secDrawFlats, "Draw Flats");
+		N64_PROFILE_BEGIN(PZ_FLATS);
 			// Draw flats
 			// Note: in the DOS code flat drawing functions are called through function pointers.
 			// Since the function pointers always seem to be the same, the functions are called directly in this code.
@@ -407,6 +411,7 @@ namespace TFE_Jedi
 #if N64_WALL_STRIPS
 		wall_flushStrip();	// sky columns
 #endif
+		N64_PROFILE_END(PZ_FLATS);
 		TFE_ZONE_END(secDrawFlats);
 
 		// Adjoins
@@ -470,7 +475,9 @@ namespace TFE_Jedi
 					if (srcWall->flags1 & WF1_ADJ_MID_TEX)
 					{
 						TFE_ZONE("Draw Transparent Walls");
+						N64_PROFILE_BEGIN(PZ_TRANS);
 						wall_drawTransparent(curAdjoinSeg, adjoinEdges);
+						N64_PROFILE_END(PZ_TRANS);
 					}
 				}
 			}
@@ -483,6 +490,7 @@ namespace TFE_Jedi
 
 		// Objects
 		TFE_ZONE_BEGIN(secDrawObjects, "Draw Objects");
+		N64_PROFILE_BEGIN(PZ_SPRITES);	// 3D objects are taken out below
 		const s32 objCount = cullObjects(s_curSector, s_objBuffer);
 		if (objCount > 0)
 		{
@@ -526,7 +534,11 @@ namespace TFE_Jedi
 				{
 					TFE_ZONE("Draw 3DO");
 
+					N64_PROFILE_END(PZ_SPRITES);
+					N64_PROFILE_BEGIN(PZ_MODELS);
 					robj3d_draw(obj, obj->model);
+					N64_PROFILE_END(PZ_MODELS);
+					N64_PROFILE_BEGIN(PZ_SPRITES);
 				}
 				else if (type == OBJ_TYPE_FRAME)
 				{
@@ -539,6 +551,7 @@ namespace TFE_Jedi
 #if N64_WALL_STRIPS
 		wall_flushStrip();
 #endif
+		N64_PROFILE_END(PZ_SPRITES);
 		TFE_ZONE_END(secDrawObjects);
 
 		s_curSector->flags1 |= SEC_FLAGS1_RENDERED;

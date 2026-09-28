@@ -2511,6 +2511,80 @@ namespace RClassic_Fixed
 		}
 		return true;
 	}
+
+#ifdef SPRTEST
+	///////////////////////////////////////////
+	// __N64__: sprites are drawn through the strip too.
+	// Their columns are transparent and go over whatever is already in the framebuffer,
+	// so for each group of 16 columns the rows covered by the sprite are first read into
+	// the strip (one cache line per row), the columns are drawn there, and the rows are
+	// written back. Written straight to the framebuffer, a close enemy missed the cache
+	// on every pixel, like the signs above.
+	///////////////////////////////////////////
+	static s32 s_spriteStripX = -1;		// first screen column of the strip, -1 = empty
+	static s32 s_spriteStripY0 = 0;		// rows covered by the sprite being drawn
+	static s32 s_spriteStripY1 = -1;
+
+	static void sprite_flushStrip()
+	{
+		if (s_spriteStripX < 0) { return; }
+		u8* row = s_display + s_spriteStripY0 * 320 + s_spriteStripX;
+		for (s32 y = s_spriteStripY0; y <= s_spriteStripY1; y++, row += 320)
+		{
+			((u64*)row)[0] = ((const u64*)s_strip[y])[0];
+			((u64*)row)[1] = ((const u64*)s_strip[y])[1];
+		}
+		s_spriteStripX = -1;
+	}
+
+	static void sprite_beginStrip(s32 y0, s32 y1)
+	{
+		wall_flushStrip();
+		s_spriteStripX = -1;
+		s_spriteStripY0 = max(y0, 0);
+		s_spriteStripY1 = min(y1, STRIP_HEIGHT - 1);
+	}
+
+	// Strip position of the pixel (x, y), reading the strip rows in when x starts a new group.
+	static u8* sprite_stripColumn(s32 x, s32 y)
+	{
+		const s32 stripX = x & ~(STRIP_WIDTH - 1);
+		if (stripX != s_spriteStripX)
+		{
+			sprite_flushStrip();
+			const u8* row = s_display + s_spriteStripY0 * 320 + stripX;
+			for (s32 r = s_spriteStripY0; r <= s_spriteStripY1; r++, row += 320)
+			{
+				((u64*)s_strip[r])[0] = ((const u64*)row)[0];
+				((u64*)s_strip[r])[1] = ((const u64*)row)[1];
+			}
+			s_spriteStripX = stripX;
+		}
+		return &s_strip[y][x & (STRIP_WIDTH - 1)];
+	}
+
+	// Same output as drawColumnS_Lit_Trans() / drawColumnS_Fullbright_Trans(): 'width'
+	// adjacent columns share the texel column (SPRTEST), they never cross a strip.
+	template <bool Lit>
+	static void sprite_drawStripColumn(u8* out, s32 width)
+	{
+		fixed16_16 vCoordFixed = s_vCoordFixed;
+		const fixed16_16 step = s_vCoordStep;
+		const u8* tex = s_texImage;
+		const u8* light = s_columnLight;
+		s32 v = floor16(vCoordFixed);
+		for (s32 i = s_yPixelCount - 1; i >= 0; i--)
+		{
+			u8 c = tex[v];
+			vCoordFixed += step;
+			v = floor16(vCoordFixed);
+			if (!c) { continue; }
+			if (Lit) { c = light[c]; }
+			u8* dst = out + i * STRIP_WIDTH;
+			for (s32 j = 0; j < width; j++) { dst[j] = c; }
+		}
+	}
+#endif
 #endif
 
 	void drawColumn_Fullbright()
@@ -3146,6 +3220,11 @@ namespace RClassic_Fixed
 		}
 #endif
 
+#if N64_WALL_STRIPS && defined(SPRTEST)
+		const bool spriteLit = spriteColumnFunc == s_columnFunc[COLFUNC_LIT_TRANS];
+		sprite_beginStrip(y0_pixel, y1_pixel);
+#endif
+
 		// Draw
 		const s32 compressed = cell->compressed;
 		u8* imageData = (u8*)cell + sizeof(WaxCell);
@@ -3224,7 +3303,11 @@ namespace RClassic_Fixed
 						*/
 						fixed16_16 uCoordNew = uCoord;
 						s32 texelU = floor16(uCoord);
-						while (floor16(uCoordNew += uCoordStep) == texelU && s_xPixelCount < 8-1 && (x + s_xPixelCount) < x1_pixel)
+						while (floor16(uCoordNew += uCoordStep) == texelU && s_xPixelCount < 8-1 && (x + s_xPixelCount) < x1_pixel
+#if N64_WALL_STRIPS
+							&& ((x + s_xPixelCount + 1) & (STRIP_WIDTH - 1)) != 0	// __N64__: groups stay inside a strip
+#endif
+							)
 						{
 							s_xPixelCount++;
 						}
@@ -3291,14 +3374,26 @@ namespace RClassic_Fixed
 					{
 						s_texImage = (u8*)image + columnOffset[texelU];
 					}
+#if N64_WALL_STRIPS && defined(SPRTEST)
+					if (s_yPixelCount > 0)
+					{
+						u8* out = sprite_stripColumn(x, y0);
+						if (spriteLit) { sprite_drawStripColumn<true>(out, s_xPixelCount + 1); }
+						else { sprite_drawStripColumn<false>(out, s_xPixelCount + 1); }
+					}
+#else
 					// Output.
 					s_columnOut = &s_display[y0 * s_width + x];
 					// Draw the column.
 					spriteColumnFunc();
+#endif
 					if (s_yPixelCount > 1) { drawn = JTRUE; }
 				}
 			}
 		}
+#if N64_WALL_STRIPS && defined(SPRTEST)
+		sprite_flushStrip();
+#endif
 #ifdef SPRTEST
 		// reset for signs
 		s_xPixelCount = 0;

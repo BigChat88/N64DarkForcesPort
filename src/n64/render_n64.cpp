@@ -12,6 +12,8 @@
 #include <TFE_RenderBackend/textureGpu.h>
 #include <TFE_System/system.h>
 #include "debug_n64.h"
+#include "overlay_n64.h"
+#include "profile_n64.h"
 #include <cstdio>
 
 #include <libdragon.h>
@@ -82,6 +84,8 @@ namespace TFE_RenderBackend
 		parms.scale_x = (f32)SCREEN_WIDTH / (f32)width;
 		parms.scale_y = (f32)SCREEN_HEIGHT / (f32)height;
 		rdpq_tex_blit(&src, 0, 0, &parms);
+		// The weapon and the HUD, see overlay_n64.cpp.
+		Overlay_N64::draw(s_tlut);
 
 		const char* overlay = Debug_N64::getOverlayText();
 		if (overlay[0])
@@ -107,7 +111,14 @@ namespace TFE_RenderBackend
 		}
 #endif
 
+#if N64_PROFILE
+		rdpq_text_print(nullptr, DEBUG_FONT_ID, 216, 16, Profile_N64::getText());
+#endif
+
 		rdpq_detach_show();
+#if N64_PROFILE
+		Profile_N64::frameShown();
+#endif
 		// TFE starts drawing the next frame into the same buffer right away.
 		rspq_wait();
 
