@@ -77,9 +77,13 @@ namespace TFE_Jedi
 		// block does not fit next to a level in 8MB. 8KB x 4 tasks = 32KB per block, and
 		// tasks come in blocks of 64 (~24KB): both grow on demand, and small blocks still
 		// fit when a large level has fragmented the heap.
+		// A task's stack only holds the LocalContext of each active call level (a few
+		// pointers, <100 bytes, popped on return; at most TASK_MAX_LEVELS deep), so 2KB is
+		// ample. Levels with many generators/turrets/mousebots have ~60 such tasks, and 8KB
+		// stacks took ~500KB there. ctxAllocate() aborts with a log on overflow.
 		TASK_CHUNK_SIZE = 64,
-		TASK_STACK_SIZE = 8 * 1024,
-		TASK_STACK_CHUNK_SIZE = 4,
+		TASK_STACK_SIZE = 2 * 1024,
+		TASK_STACK_CHUNK_SIZE = 8,
 #else
 		TASK_CHUNK_SIZE = 256,
 		TASK_STACK_SIZE = 32 * 1024,	// 32KB of stack memory.
@@ -297,6 +301,23 @@ namespace TFE_Jedi
 		s_curContext = nullptr;
 		s_taskCount  = 0;
 	}
+
+#ifdef __N64__
+	// __N64__: task_freeAll() only empties the task and stack arrays, their blocks stay
+	// allocated in the game region. So the game region kept the task high-water mark of
+	// every level played before (~500KB after a few levels), and the largest levels ran
+	// out of memory once reached after others. Called between levels, with no task alive.
+	void task_releaseMemory()
+	{
+		if (!s_tasks || s_taskCount) { return; }
+
+		freeChunkedArray(s_tasks);
+		freeChunkedArray(s_stackBlocks);
+		s_tasks = createChunkedArray(sizeof(Task), TASK_CHUNK_SIZE, TASK_PREALLOCATED_CHUNKS, s_gameRegion);
+		s_stackBlocks = createChunkedArray(TASK_STACK_SIZE, TASK_STACK_CHUNK_SIZE, TASK_PREALLOCATED_CHUNKS, s_gameRegion);
+		s_curContext = nullptr;
+	}
+#endif
 
 	void task_shutdown()
 	{

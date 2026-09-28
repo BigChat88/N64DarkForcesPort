@@ -1,11 +1,18 @@
 #include <cstring>
 
 #include "parser.h"
+#include <TFE_FileSystem/filestream.h>
+#include <cstdlib>
 #include <algorithm>
 
 namespace
 {
 	static char s_line[4096];
+	enum
+	{
+		PARSER_WINDOW_SIZE = 16384,
+		PARSER_LOOKAHEAD   = 64,	// Covers comment strings and "/*" checks past the current char.
+	};
 	bool isWhitespace(const char c)
 	{
 		if (c > 32 && c < 127)
@@ -25,13 +32,70 @@ namespace
 	}
 }
 
-TFE_Parser::TFE_Parser() : m_buffer(nullptr), m_bufferLen(0u), m_enableBlockComments(false), m_blockComment(false), m_enableColorSeperator(false), m_convertToUppercase(false) {}
-TFE_Parser::~TFE_Parser() {}
+TFE_Parser::TFE_Parser() : m_buffer(nullptr), m_bufferLen(0u), m_enableBlockComments(false), m_blockComment(false), m_enableColorSeperator(false), m_convertToUppercase(false),
+	m_streamPath(nullptr), m_window(nullptr), m_winStart(0), m_winLen(0) {}
+TFE_Parser::~TFE_Parser()
+{
+	free(m_window);
+	delete m_streamPath;
+}
 
 void TFE_Parser::init(const char* buffer, size_t len)
 {
 	m_buffer = buffer;
 	m_bufferLen = len;
+	delete m_streamPath;
+	m_streamPath = nullptr;
+}
+
+bool TFE_Parser::initStream(const FilePath* filePath)
+{
+	init(nullptr, 0);
+	m_winStart = 0;
+	m_winLen = 0;
+
+	FileStream file;
+	if (!file.open(filePath, Stream::MODE_READ)) { return false; }
+	const size_t len = file.getSize();
+	file.close();
+
+	if (!m_window)
+	{
+		// Extra zeroed padding so lookahead past the end of the data reads zeros.
+		m_window = (char*)malloc(PARSER_WINDOW_SIZE + PARSER_LOOKAHEAD);
+		if (!m_window) { return false; }
+	}
+	m_streamPath = new FilePath(*filePath);
+	m_bufferLen = len;
+	return true;
+}
+
+// Returns a pointer to the data at absolute position i, with at least PARSER_LOOKAHEAD
+// readable bytes after it (zero padded at the end of the data).
+const char* TFE_Parser::ptr(size_t i)
+{
+	if (!m_streamPath) { return m_buffer + i; }
+
+	const size_t winEnd = m_winStart + m_winLen;
+	const bool needsFill = i < m_winStart || i >= winEnd ||
+		(i + PARSER_LOOKAHEAD > winEnd && winEnd < m_bufferLen);
+	if (needsFill)
+	{
+		// Keep one character of history for the "*/" check.
+		m_winStart = i > 0 ? i - 1 : 0;
+		size_t count = m_bufferLen > m_winStart ? m_bufferLen - m_winStart : 0;
+		if (count > PARSER_WINDOW_SIZE) { count = PARSER_WINDOW_SIZE; }
+		m_winLen = 0;
+		FileStream file;
+		if (count && file.open(m_streamPath, Stream::MODE_READ))
+		{
+			file.seek(s32(m_winStart));
+			m_winLen = file.readBuffer(m_window, u32(count));
+			file.close();
+		}
+		memset(m_window + m_winLen, 0, PARSER_WINDOW_SIZE + PARSER_LOOKAHEAD - m_winLen);
+	}
+	return m_window + (i - m_winStart);
 }
 
 // Enable block comments of the form /*...*/
@@ -89,20 +153,20 @@ const char* TFE_Parser::readLine(size_t& bufferPos, bool skipLeadingWhitespace, 
 		{
 			bufferPos = i + 1;
 
-			if (m_enableBlockComments && i > 0 && m_buffer[i-1] == '*' && m_buffer[i] == '/')
+			if (m_enableBlockComments && i > 0 && at(i-1) == '*' && at(i) == '/')
 			{
 				m_blockComment = false;
 			}
-			else if (m_enableBlockComments && m_buffer[i] == '/' && m_buffer[i+1] == '*')
+			else if (m_enableBlockComments && at(i) == '/' && at(i+1) == '*')
 			{
 				m_blockComment = true;
 			}
-			else if (m_buffer[i] == '\n' || m_buffer[i] == '\r')
+			else if (at(i) == '\n' || at(i) == '\r')
 			{
 				// search for the next valid character, then end it.
 				for (size_t ii = i + 1; ii < m_bufferLen; ii++)
 				{
-					if (m_buffer[ii] != '\n' && m_buffer[ii] != '\r')
+					if (at(ii) != '\n' && at(ii) != '\r')
 					{
 						bufferPos = ii;
 						break;
@@ -115,7 +179,7 @@ const char* TFE_Parser::readLine(size_t& bufferPos, bool skipLeadingWhitespace, 
 				// is this the beginning of a comment?
 				if (!commentOnlyAtBeginning)
 				{
-					inComment = isComment(m_buffer + i);
+					inComment = isComment(ptr(i));
 				}
 
 				// if not in a comment, go ahead and add to the line.
@@ -123,11 +187,11 @@ const char* TFE_Parser::readLine(size_t& bufferPos, bool skipLeadingWhitespace, 
 				{
 					if (m_convertToUppercase)
 					{
-						s_line[linePos++] = toupper(m_buffer[i]);
+						s_line[linePos++] = toupper(at(i));
 					}
 					else
 					{
-						s_line[linePos++] = m_buffer[i];
+						s_line[linePos++] = at(i);
 					}
 				}
 			}

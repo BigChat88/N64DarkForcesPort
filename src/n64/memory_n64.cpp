@@ -115,6 +115,19 @@ namespace TFE_Memory
 		free(region);
 	}
 
+	// One line with the size of every live region, for the development overlay.
+	s32 n64_regionSummary(char* out, s32 outSize)
+	{
+		s32 len = 0;
+		out[0] = 0;
+		for (s32 i = 0; i < MAX_REGIONS && len < outSize; i++)
+		{
+			if (!s_regions[i]) { continue; }
+			len += snprintf(out + len, outSize - len, "%s:%uK ", s_regions[i]->name, (u32)(s_regions[i]->used / 1024));
+		}
+		return len;
+	}
+
 	// Stops with a report of the heap and every region (see malloc_n64.cpp too).
 	void n64_reportOutOfMemory(const char* where, size_t size)
 	{

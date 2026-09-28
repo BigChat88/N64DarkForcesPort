@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 
+struct FilePath;
 typedef std::vector<std::string> TokenList;
 
 class TFE_Parser
@@ -17,6 +18,10 @@ public:
 	~TFE_Parser();
 
 	void init(const char* buffer, size_t len);
+	// Stream a file through a small window instead of requiring the whole file in memory.
+	// The file is re-opened on every window refill, so other files (even from the same
+	// archive) may be opened and closed while parsing.
+	bool initStream(const FilePath* filePath);
 
 	// Enable block comments of the form /*...*/
 	void enableBlockComments();
@@ -45,6 +50,14 @@ private:
 	bool m_enableColorSeperator;
 	bool m_convertToUppercase;
 
+	// Streaming window (only used when m_streamPath is set).
+	FilePath* m_streamPath;
+	char*   m_window;
+	size_t  m_winStart;
+	size_t  m_winLen;
+
 private:
 	bool isComment(const char* buffer);
+	const char* ptr(size_t i);
+	char at(size_t i) { return *ptr(i); }
 };

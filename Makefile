@@ -6,14 +6,13 @@ ROM_NAME = darkforces64
 TFE = tfe
 
 # The ROM is built next to the Makefile (n64.mk's %.z64 rule) and copied to output/,
-# where build.cmd / tools/pack_rom.py also write it.
-all: output/$(ROM_NAME).z64
-.PHONY: all
-
-output/$(ROM_NAME).z64: $(ROM_NAME).z64
+# where build.cmd / tools/pack_rom.py also write it. The copy is not a %.z64 target:
+# n64.mk's pattern specific flags would be applied twice to the link.
+all: $(ROM_NAME).z64
 	@mkdir -p output
-	@echo "    [COPY] $@"
-	cp $< $@
+	@echo "    [COPY] output/$(ROM_NAME).z64"
+	@cp $< output/$(ROM_NAME).z64
+.PHONY: all
 
 # The Force Engine is compiled with the Amiga low-spec code paths enabled
 # (__AMIGA__), plus __N64__ to replace the few spots that call AmigaOS APIs.
@@ -52,7 +51,7 @@ TFE_SIZE_OPT_DIRS = TFE_DarkForces TFE_Asset TFE_Archive TFE_FileSystem TFE_Game
 $(foreach d,$(TFE_SIZE_OPT_DIRS),$(BUILD_DIR)/$(TFE)/$(d)/%.o): CXXFLAGS += -Os
 
 # The sound cache is purgeable memory, see src/n64/malloc_n64.cpp.
-N64_LDFLAGS += --wrap=malloc --wrap=calloc --wrap=realloc --wrap=free
+N64_LDFLAGS += --wrap=malloc --wrap=calloc --wrap=realloc --wrap=memalign --wrap=free
 
 # ---------------------------------------------------------------------------
 # N64 platform layer (replaces tfe/amiga)

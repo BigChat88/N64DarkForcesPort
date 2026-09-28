@@ -1132,14 +1132,24 @@ namespace TFE_Jedi
 			IM_LOG_ERR("Cannot open midi file '%s'.", midiFile);
 			return IM_NULL_SOUNDID;
 		}
-		assert(s_midiFileCount < IM_MIDI_FILE_COUNT);
+		// Use the first free slot: ImCloseMidi() frees slots in any order, so the file count
+		// is not the next free index. Using it overwrote a midi still in use and leaked its
+		// memory, which accumulated from level to level.
+		u32 slot = 0;
+		while (slot < IM_MIDI_FILE_COUNT && s_midiFiles[slot]) { slot++; }
+		assert(slot < IM_MIDI_FILE_COUNT);
+		if (slot >= IM_MIDI_FILE_COUNT)
+		{
+			IM_LOG_ERR("Too many midi files loaded, cannot load '%s'.", midiFile);
+			return IM_NULL_SOUNDID;
+		}
 
 		size_t len = file.getSize();
-		s_midiFiles[s_midiFileCount] = (u8*)imuse_alloc(len);
-		file.readBuffer(s_midiFiles[s_midiFileCount], u32(len));
+		s_midiFiles[slot] = (u8*)imuse_alloc(len);
+		file.readBuffer(s_midiFiles[slot], u32(len));
 		file.close();
 
-		ImSoundId id = ImSoundId(s_midiFileCount | imMidiFlag);
+		ImSoundId id = ImSoundId(slot | imMidiFlag);
 		s_midiFileCount++;
 		return id;
 	}

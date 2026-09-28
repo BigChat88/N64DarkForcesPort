@@ -673,22 +673,15 @@ namespace TFE_DarkForces
 					reticle_enable(false);
 
 #ifdef __N64__
+					// Restart Mission: cutsceneIndex still points at the mission, so
+					// startNextMode() launches it again, with the inventory the agent had when
+					// the level started.
 					if (s_restartMission)
 					{
-						// cutsceneIndex still points at the mission, so startNextMode() launches it
-						// again, with the inventory the agent had when the level started. The level
-						// data must be freed first, since the new mission allocates from it.
 						s_restartMission = JFALSE;
-						region_clear(s_levelRegion);
-						bitmap_clearLevelData();
-						bitmap_setAllocator(s_gameRegion);
-						level_freeAllAssets();
-						TFE_A11Y::clearCaptions();
-						startNextMode();
-						break;
 					}
+					else
 #endif
-
 					if (!s_levelComplete)
 					{
 						s_runGameState.abortLevel = JTRUE;
@@ -699,7 +692,20 @@ namespace TFE_DarkForces
 						s_runGameState.cutsceneIndex++;
 						handleLevelComplete();
 					}
-					
+
+#ifdef __N64__
+					// __N64__: the level is freed before starting the next mode. The cutscene
+					// that follows a mission is loaded by startNextMode(), and loading it while
+					// the level (up to ~2MB) was still allocated ran out of memory between some
+					// missions. A restarted mission also allocates the level again.
+					region_clear(s_levelRegion);
+					bitmap_clearLevelData();
+					bitmap_setAllocator(s_gameRegion);
+					level_freeAllAssets();
+					TFE_A11Y::clearCaptions();
+
+					startNextMode();
+#else
 					startNextMode();
 
 					region_clear(s_levelRegion);
@@ -707,6 +713,7 @@ namespace TFE_DarkForces
 					bitmap_setAllocator(s_gameRegion);
 					level_freeAllAssets();
 					TFE_A11Y::clearCaptions();
+#endif
 				}
 			} break;
 		}
@@ -807,6 +814,9 @@ namespace TFE_DarkForces
 				bitmap_setAllocator(s_levelRegion);
 				actor_clearState();
 
+#ifdef __N64__
+				task_releaseMemory();
+#endif
 				task_reset();
 				inf_clearState();
 				s_sharedState.loadMissionTask = createTask("start mission", mission_startTaskFunc, JTRUE);

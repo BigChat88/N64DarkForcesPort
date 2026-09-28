@@ -1234,14 +1234,11 @@ namespace TFE_Jedi
 			TFE_System::logWrite(LOG_ERROR, "level_loadINF", "Cannot open level INF '%s'.", levelPath);
 			return JFALSE;
 		}
-		size_t len = file.getSize();
-		s_buffer.resize(len);
-		file.readBuffer(s_buffer.data(), u32(len));
-		file.close();
-
 		TFE_Parser parser;
 		size_t bufferPos = 0;
-		parser.init(s_buffer.data(), s_buffer.size());
+		// Stream the file instead of loading it whole: large levels (e.g. IMPCITY) do not fit in a contiguous block.
+		file.close();
+		if (!parser.initStream(&filePath)) { return JFALSE; }
 		parser.enableBlockComments();
 		parser.addCommentString("//");
 		parser.convertToUpperCase(true);

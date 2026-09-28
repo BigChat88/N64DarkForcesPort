@@ -1,5 +1,6 @@
 #include <climits>
 #include <cstring>
+#include <algorithm>
 
 #include "level.h"
 #include "levelData.h"
@@ -60,6 +61,71 @@ namespace TFE_Jedi
 	JBool level_loadObjects(const char* levelName, u8 difficulty);
 	JBool level_loadGoals(const char* levelName);
 
+#ifdef __N64__
+	// __N64__: the largest WAX files (PHASE3X.WAX ~400KB in ARC) each need one contiguous block.
+	// Once the level geometry, textures and other sprites are loaded the free heap is split into
+	// holes too small for them, even with over 1MB free in total. So the big sprites listed in
+	// the .O file are loaded first, largest first, while the heap is least fragmented.
+	// getWax() caches them, so level_loadObjects() picks up the same assets afterwards.
+	enum { LARGE_SPRITE_SIZE = 96 * 1024, MAX_LARGE_SPRITES = 16 };
+
+	static void level_preloadLargeSprites(const char* levelName)
+	{
+		char levelPath[TFE_MAX_PATH];
+		strcpy(levelPath, levelName);
+		strcat(levelPath, ".O");
+
+		FilePath filePath;
+		if (!TFE_Paths::getFilePath(levelPath, &filePath)) { return; }
+
+		TFE_Parser parser;
+		size_t bufferPos = 0;
+		if (!parser.initStream(&filePath)) { return; }
+		parser.enableBlockComments();
+		parser.addCommentString("//");
+		parser.addCommentString("#");
+		parser.convertToUpperCase(true);
+
+		struct LargeSprite { char name[32]; size_t size; };
+		LargeSprite sprites[MAX_LARGE_SPRITES];
+		s32 count = 0;
+
+		const char* line;
+		while ((line = parser.readLine(bufferPos)) != nullptr)
+		{
+			s32 spriteCount;
+			if (sscanf(line, "SPRS %d", &spriteCount) != 1) { continue; }
+
+			for (s32 s = 0; s < spriteCount && (line = parser.readLine(bufferPos)) != nullptr; s++)
+			{
+				char name[32];
+				if (sscanf(line, " SPR: %31s ", name) != 1) { continue; }
+
+				FilePath spritePath;
+				FileStream file;
+				if (!TFE_Paths::getFilePath(name, &spritePath) || !file.open(&spritePath, Stream::MODE_READ)) { continue; }
+				const size_t size = file.getSize();
+				file.close();
+
+				if (size >= LARGE_SPRITE_SIZE && count < MAX_LARGE_SPRITES)
+				{
+					strcpy(sprites[count].name, name);
+					sprites[count].size = size;
+					count++;
+				}
+			}
+			break;
+		}
+
+		// Largest first.
+		std::sort(sprites, sprites + count, [](const LargeSprite& a, const LargeSprite& b) { return a.size > b.size; });
+		for (s32 i = 0; i < count; i++)
+		{
+			TFE_Sprite_Jedi::getWax(sprites[i].name);
+		}
+	}
+#endif
+
 	JBool level_load(const char* levelName, u8 difficulty)
 	{
 		if (!levelName) { return JFALSE; }
@@ -74,6 +140,9 @@ namespace TFE_Jedi
 			s_levelState.complete[COMPL_ITEM][i] = JFALSE;
 		}
 
+#ifdef __N64__
+		level_preloadLargeSprites(levelName);
+#endif
 		if (!level_loadGeometry(levelName)) { return JFALSE; }
 		level_loadObjects(levelName, difficulty);
 		inf_load(levelName);
@@ -124,14 +193,11 @@ namespace TFE_Jedi
 			TFE_System::logWrite(LOG_ERROR, "level_loadGeometry", "Cannot open level geometry '%s'.", levelName);
 			return false;
 		}
-		size_t len = file.getSize();
-		s_buffer.resize(len);
-		file.readBuffer(s_buffer.data(), u32(len));
-		file.close();
-
 		TFE_Parser parser;
 		size_t bufferPos = 0;
-		parser.init(s_buffer.data(), s_buffer.size());
+		// Stream the file instead of loading it whole: large levels (e.g. IMPCITY) do not fit in a contiguous block.
+		file.close();
+		if (!parser.initStream(&filePath)) { return JFALSE; }
 		parser.addCommentString("#");
 		parser.convertToUpperCase(true);
 
@@ -599,14 +665,11 @@ namespace TFE_Jedi
 			return JFALSE;
 		}
 
-		size_t len = file.getSize();
-		s_buffer.resize(len);
-		file.readBuffer(s_buffer.data(), u32(len));
-		file.close();
-
 		TFE_Parser parser;
 		size_t bufferPos = 0;
-		parser.init(s_buffer.data(), s_buffer.size());
+		// Stream the file instead of loading it whole: large levels (e.g. IMPCITY) do not fit in a contiguous block.
+		file.close();
+		if (!parser.initStream(&filePath)) { return JFALSE; }
 		parser.enableBlockComments();
 		parser.addCommentString("//");
 		parser.addCommentString("#");
@@ -710,14 +773,11 @@ namespace TFE_Jedi
 			return false;
 		}
 
-		size_t len = file.getSize();
-		s_buffer.resize(len);
-		file.readBuffer(s_buffer.data(), u32(len));
-		file.close();
-
 		TFE_Parser parser;
 		size_t bufferPos = 0;
-		parser.init(s_buffer.data(), s_buffer.size());
+		// Stream the file instead of loading it whole: large levels (e.g. IMPCITY) do not fit in a contiguous block.
+		file.close();
+		if (!parser.initStream(&filePath)) { return JFALSE; }
 		parser.enableBlockComments();
 		parser.addCommentString("//");
 		parser.addCommentString("#");

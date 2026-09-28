@@ -50,6 +50,9 @@ namespace TFE_Jedi
 	void  task_freeAll();
 	void  task_reset();
 	void  task_shutdown();
+#ifdef __N64__
+	void  task_releaseMemory();	// Free the task and stack blocks between levels.
+#endif
 
 	void  task_makeActive(Task* task);
 	void  task_setNextTick(Task* task, Tick tick);

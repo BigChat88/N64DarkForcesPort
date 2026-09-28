@@ -31,6 +31,9 @@
 #include <TFE_Jedi/Renderer/jediRenderer.h>
 #include <TFE_Settings/settings.h>
 #include <TFE_System/system.h>
+#ifdef __N64__
+#include "music_n64.h"
+#endif
 
 using namespace TFE_Jedi;
 using namespace TFE_Input;
@@ -129,8 +132,17 @@ namespace TFE_DarkForces
 		pauseLevelSound();
 		if (!s_pdaLoaded)
 		{
+#ifdef __N64__
+			// __N64__: the largest levels leave too little memory for the PDA art (~150-250KB).
+			// The music is paused while the PDA is open, so its SoundFont (~275KB) is unloaded
+			// meanwhile; pda_close() frees the PDA art and loads the music back.
+			Music_N64::suspend();
+#endif
 			if (!menu_openResourceArchive("dfbrief.lfd"))
 			{
+#ifdef __N64__
+				Music_N64::resume();
+#endif
 				return;
 			}
 			LRect rect;
@@ -164,6 +176,9 @@ namespace TFE_DarkForces
 			
 			if (!menu_openResourceArchive("menu.lfd"))
 			{
+#ifdef __N64__
+				pda_cleanup();
+#endif
 				return;
 			}
 			s_framebuffer = ldraw_getBitmap();
@@ -207,6 +222,10 @@ namespace TFE_DarkForces
 		lpalette_free(s_palette);
 
 		pda_resetState();
+#ifdef __N64__
+		// Only after the PDA art is freed: the music was unloaded to make room for it.
+		Music_N64::resume();
+#endif
 	}
 
 	void pda_resetState()
@@ -237,6 +256,11 @@ namespace TFE_DarkForces
 
 		// TFE
 		reticle_enable(true);
+
+#ifdef __N64__
+		// Free the PDA art, which also loads the music back (see pda_start()).
+		pda_cleanup();
+#endif
 
 		// Convert back to level rendering.
 		TFE_Settings_Graphics* graphics = TFE_Settings::getGraphicsSettings();
@@ -271,6 +295,10 @@ namespace TFE_DarkForces
 
 		// Input
 		pda_handleInput();
+#ifdef __N64__
+		// The EXIT button closes the PDA, which now frees its art: nothing is left to draw.
+		if (!s_pdaOpen) { return; }
+#endif
 
 		// Main view
 		u32 outWidth, outHeight;

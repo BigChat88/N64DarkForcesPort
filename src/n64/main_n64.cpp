@@ -334,8 +334,15 @@ static void setupPaths()
 	TFE_Paths::setPath(PATH_SOURCE_DATA, c_romPath);
 }
 
+namespace MemReserve_N64
+{
+	void acquire();
+}
+
 int main(void)
 {
+	// Held back for the out-of-memory report (see malloc_n64.cpp).
+	MemReserve_N64::acquire();
 	debug_init_isviewer();
 	debug_init_usblog();
 	dfs_init(DFS_DEFAULT_LOCATION);

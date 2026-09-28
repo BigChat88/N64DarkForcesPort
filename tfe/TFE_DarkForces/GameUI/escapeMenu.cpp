@@ -132,6 +132,7 @@ namespace TFE_DarkForces
 	static s32 s_n64Selected = ESC_BTN_RETURN;
 	static s32 s_n64ConfirmSelected = CONFIRM_NO;
 	static s32 s_n64PrevConfirmState = CONFIRM_STATE_NONE;
+	static JBool s_n64ConfirmPressing = JFALSE;	// A held on a dialog button
 	static JBool s_n64CheatsOpen = JFALSE;		// the Cheats list is shown over the menu
 	static s32 s_n64CheatSelected = 0;
 	static EscapeMenuAction n64_updateSelection(EscapeMenuAction action);
@@ -517,22 +518,19 @@ namespace TFE_DarkForces
 		}
 	}
 
-	// The No / Yes buttons. The dialog images have a red frame baked around the default
-	// button (No to abort, Yes for the next mission), so the frames of both buttons are
-	// painted again: red around the selected one. The face is brighter when selected.
-	static void n64_drawConfirmButton(const Vec4i& rect, const char* label, JBool selected, u8 frameColor)
+	// While A is held, the lit (green) button is drawn one shade darker, like the dialogs
+	// of the agent menu (see agentMenu.cpp).
+	static void n64_darkenButton(const Vec4i& rect)
 	{
 		u8* fb = s_emState.framebuffer;
-		// The rectangle bounds (of the face) are inclusive, the frame is 2 pixels out.
-		const s32 x0 = rect.x - 2, y0 = rect.y - 2, x1 = rect.z + 2, y1 = rect.w + 2;
-		const u8 frame = selected ? 165 : frameColor;
-		drawHorizontalLine(x0, x1, y0, frame, fb);
-		drawHorizontalLine(x0, x1, y1, frame, fb);
-		drawVerticalLine(y0, y1, x0, frame, fb);
-		drawVerticalLine(y0, y1, x1, frame, fb);
-		drawColoredQuad(rect.x, rect.y, rect.z - rect.x + 1, rect.w - rect.y + 1, selected ? 12 : 14, fb);
-		const s32 x = (rect.x + rect.z + 1 - getStringPixelLength(label)) / 2;
-		print(label, x, rect.y + 2, c_n64DialogGreen, fb);
+		for (s32 y = rect.y; y <= rect.w; y++)
+		{
+			u8* row = &fb[y * 320];
+			for (s32 x = rect.x; x <= rect.z; x++)
+			{
+				if (row[x] >= 10 && row[x] <= 13) { row[x]++; }
+			}
+		}
 	}
 
 	// The classic cheats, applied when selected instead of being typed (like the Cheats
@@ -623,11 +621,14 @@ namespace TFE_DarkForces
 			const char* lines[] = { "MISSION GOALS", "INCOMPLETE", "", "ABORT MISSION?" };
 			n64_drawDialogText(lines, 4, c_n64LabelRed);
 		}
-		// The controller selection: buttonPressed is cleared when a button is activated,
-		// which would show No selected while the next screen loads.
+		// Like the agent menu dialogs: the images keep their red frame around the default
+		// button and the selected button is drawn lit (its "down" frame). The controller
+		// selection is used since buttonPressed is cleared when a button is activated, which
+		// would show No selected while the next screen loads.
 		const JBool yes = (s_n64ConfirmSelected == CONFIRM_YES);
-		n64_drawConfirmButton(s_confirmButtonRange[CONFIRM_YES], "YES", yes, 79);
-		n64_drawConfirmButton(s_confirmButtonRange[CONFIRM_NO], "NO", !yes, 78);
+		blitDeltaFrame(&s_emState.confirmMenuFrames[yes ? CONFIRM_NEXT_YESBTN_DOWN : CONFIRM_NEXT_YESBTN_UP], 0, 0, fb);
+		blitDeltaFrame(&s_emState.confirmMenuFrames[yes ? CONFIRM_NEXT_NOBTN_UP : CONFIRM_NEXT_NOBTN_DOWN], 0, 0, fb);
+		if (s_n64ConfirmPressing) { n64_darkenButton(s_confirmButtonRange[s_n64ConfirmSelected]); }
 	}
 #endif
 
@@ -963,12 +964,25 @@ namespace TFE_DarkForces
 			if (s_emState.confirmState != s_n64PrevConfirmState)
 			{
 				s_n64ConfirmSelected = (s_emState.confirmState == CONFIRM_STATE_NEXT) ? CONFIRM_YES : CONFIRM_NO;
+				// The A press that opened the dialog must not activate it when released.
+				s_n64ConfirmPressing = JFALSE;
 			}
-			if (left)  { s_n64ConfirmSelected = CONFIRM_NO; }
-			if (right) { s_n64ConfirmSelected = CONFIRM_YES; }
+			if (left)  { s_n64ConfirmSelected = CONFIRM_NO;  s_n64ConfirmPressing = JFALSE; }
+			if (right) { s_n64ConfirmSelected = CONFIRM_YES; s_n64ConfirmPressing = JFALSE; }
 			s_emState.buttonPressed = s_n64ConfirmSelected;
-			if (select) { pressed = s_n64ConfirmSelected; }
-			else if (back) { pressed = CONFIRM_NO; }
+			// Like a mouse click (and the agent menu dialogs): the button is pressed while A
+			// is held and activated when A is released.
+			if (select) { s_n64ConfirmPressing = JTRUE; }
+			else if (s_n64ConfirmPressing && !TFE_Input::mouseDown(MBUTTON_LEFT))
+			{
+				s_n64ConfirmPressing = JFALSE;
+				pressed = s_n64ConfirmSelected;
+			}
+			if (back && pressed < 0)
+			{
+				s_n64ConfirmPressing = JFALSE;
+				pressed = CONFIRM_NO;
+			}
 		}
 		s_n64PrevConfirmState = s_emState.confirmState;
 		s_emState.buttonHover = JTRUE;

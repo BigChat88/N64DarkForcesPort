@@ -16,4 +16,10 @@ namespace Music_N64
 	// called after the mixer is initialized. Without a SoundFont in the ROM,
 	// music is simply disabled.
 	void init();
+
+	// Frees the SoundFont and synthesizer (~275KB) while the music is paused, e.g. while
+	// the PDA is open, and loads them again. The MIDI channel state (programs, controllers,
+	// pitch bend) is kept and sent again on resume so the instruments stay the same.
+	void suspend();
+	void resume();
 }

@@ -21,11 +21,40 @@ namespace Music_N64
 	static s64 s_softSample = 0;
 	static f64 s_sampleRemainder = 0.0;
 
+	// Last MIDI state per channel, replayed after resume(). -1 = never set.
+	enum { MIDI_CHANNELS = 16, MIDI_CONTROLLERS = 120 };
+	static s16 s_program[MIDI_CHANNELS];
+	static s16 s_controller[MIDI_CHANNELS][MIDI_CONTROLLERS];
+	static s32 s_pitchBend[MIDI_CHANNELS];
+	static bool s_suspended = false;
+
+	static void resetChannelState()
+	{
+		for (s32 ch = 0; ch < MIDI_CHANNELS; ch++)
+		{
+			s_program[ch] = -1;
+			s_pitchBend[ch] = -1;
+			for (s32 c = 0; c < MIDI_CONTROLLERS; c++) { s_controller[ch][c] = -1; }
+		}
+	}
+
+	void recordMessage(u8 type, u8 arg1, u8 arg2)
+	{
+		const s32 ch = type & 0x0f;
+		switch (type & 0xf0)
+		{
+			case 0xb0: if (arg1 < MIDI_CONTROLLERS) { s_controller[ch][arg1] = arg2; } break;
+			case 0xc0: s_program[ch] = arg1; break;
+			case 0xe0: s_pitchBend[ch] = arg1 | (arg2 << 7); break;
+			default: break;
+		}
+	}
+
 	// Advances the synthesizer (envelopes, release tails) once per mixing round.
 	static void softEvent(void* ctx, int roundSamples)
 	{
 		s_softSample += roundSamples;
-		s_target->ops->process(s_target, s_softSample);
+		if (s_target) { s_target->ops->process(s_target, s_softSample); }
 	}
 
 	// Runs one iMuse MIDI tick at an exact sample time and schedules the next one.
@@ -34,7 +63,7 @@ namespace Music_N64
 		const s64 now = s_scheduledSample;
 		if (s_softSample < now)
 		{
-			s_target->ops->process(s_target, now);
+			if (s_target) { s_target->ops->process(s_target, now); }
 			s_softSample = now;
 		}
 
@@ -60,6 +89,7 @@ namespace Music_N64
 		}
 		fclose(test);
 
+		resetChannelState();
 		s_bank = sf64_load(c_soundFontPath);
 		s_synth = sf64_synth_create(s_bank);
 		sf64_synth_set_channels(s_synth, FIRST_CHANNEL, VOICES, MIXER_PRIORITY_MUSIC);
@@ -75,6 +105,46 @@ namespace Music_N64
 
 		mixer_add_soft_event(softEvent, nullptr);
 		mixer_add_event(0, tickEvent, nullptr);
+	}
+
+	void suspend()
+	{
+		if (!s_bank || s_suspended) { return; }
+		// message() stops forwarding (but keeps recording) once there is no target.
+		s_target = nullptr;
+		sf64_synth_close(s_synth);
+		sf64_close(s_bank);
+		s_synth = nullptr;
+		s_bank = nullptr;
+		s_suspended = true;
+	}
+
+	void resume()
+	{
+		if (!s_suspended) { return; }
+		s_suspended = false;
+
+		s_bank = sf64_load(c_soundFontPath);
+		s_synth = sf64_synth_create(s_bank);
+		sf64_synth_set_channels(s_synth, FIRST_CHANNEL, VOICES, MIXER_PRIORITY_MUSIC);
+		for (s32 ch = FIRST_CHANNEL; ch < FIRST_CHANNEL + VOICES; ch++)
+		{
+			mixer_ch_set_limits(ch, 0, 192000, 0);
+		}
+		midi_target_t* t = sf64_synth_midi_target(s_synth);
+		if (t->ops->reset) { t->ops->reset(t, s_now); }
+
+		// Restore the instruments and controllers iMuse set up before the suspension.
+		for (s32 ch = 0; ch < MIDI_CHANNELS; ch++)
+		{
+			if (s_program[ch] >= 0) { t->ops->program_change(t, ch, s_program[ch], s_now); }
+			for (s32 c = 0; c < MIDI_CONTROLLERS; c++)
+			{
+				if (s_controller[ch][c] >= 0) { t->ops->control_change(t, ch, c, s_controller[ch][c], s_now); }
+			}
+			if (s_pitchBend[ch] >= 0) { t->ops->pitch_bend(t, ch, s_pitchBend[ch], s_now); }
+		}
+		s_target = t;
 	}
 
 	bool isAvailable()
@@ -118,6 +188,7 @@ namespace TFE_Audio
 
 		void message(u8 type, u8 arg1, u8 arg2) override
 		{
+			Music_N64::recordMessage(type, arg1, arg2);
 			midi_target_t* t = Music_N64::target();
 			if (!t) { return; }
 
