@@ -37,6 +37,7 @@
 #include <TFE_Input/inputMapping.h>
 #ifdef __N64__
 #include "overlay_n64.h"
+#include "levelPurge_n64.h"
 #endif
 
 using namespace TFE_Jedi;
@@ -437,6 +438,9 @@ namespace TFE_DarkForces
 				reticle_enable(true);
 			}
 			s_loadingFromSave = JFALSE;
+#ifdef __N64__
+			LevelPurge_N64::reset();
+#endif
 			TFE_Input::clearAccumulatedMouseMove();
 
 			s_gamePaused = JFALSE;
@@ -549,6 +553,10 @@ namespace TFE_DarkForces
 				}
 				else if (s_missionMode == MISSION_MODE_MAIN)
 				{
+#ifdef __N64__
+					// __N64__: release the part of the level left behind (see levelPurge_n64.cpp).
+					LevelPurge_N64::update();
+#endif
 					updateScreensize();
 					drawWorld(s_framebuffer, s_playerEye->sector, s_levelColorMap, s_lightSourceRamp);
 #ifdef __N64__

@@ -94,6 +94,9 @@ namespace TFE_Sprite_Jedi
 	JediWax*   getWax(const char* name, AssetPool pool = POOL_LEVEL);
 	void freeAll();
 	void freeLevelData();
+#ifdef __N64__
+	void freeWax(JediWax* wax);	// frees one POOL_LEVEL sprite (see levelPurge_n64.cpp)
+#endif
 
 	const std::vector<JediWax*>& getWaxList(AssetPool pool = POOL_LEVEL);
 	const std::vector<JediFrame*>& getFrameList(AssetPool pool = POOL_LEVEL);

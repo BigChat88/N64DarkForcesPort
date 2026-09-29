@@ -65,6 +65,7 @@ namespace TFE_Jedi
 		JediWax*const* wax = waxList.data();
 		for (size_t i = 0; i < waxCount; i++)
 		{
+			if (!wax[i]) { continue; }	// __N64__: freed by TFE_Sprite_Jedi::freeWax()
 			for (s32 animId = 0; animId < wax[i]->animCount; animId++)
 			{
 				WaxAnim* anim = WAX_AnimPtr(wax[i], animId);

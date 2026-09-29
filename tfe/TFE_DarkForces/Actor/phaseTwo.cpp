@@ -991,8 +991,9 @@ namespace TFE_DarkForces
 
 		actor_removePhysicsActorFromWorld(physicsActor);
 		deleteLogicAndObject(&trooper->logic);
-		level_free(trooper);
+		// __N64__: free the task first, its pointer lives in the memory freed below.
 		task_free(physicsActor->actorTask);
+		level_free(trooper);
 	}
 
 	void phaseTwo_serialize(Logic*& logic, SecObject* obj, Stream* stream)

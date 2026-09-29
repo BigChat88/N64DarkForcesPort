@@ -454,10 +454,39 @@ namespace TFE_Sprite_Jedi
 		asset->animCount = animIdx;
 
 		s_sprites[pool][name] = asset;
+#ifdef __N64__
+		// A sprite released by freeWax() gets its old slot back, so the indices
+		// stored in save games keep pointing to the right sprite.
+		for (size_t i = 0; i < s_spriteNames[pool].size(); i++)
+		{
+			if (!s_spriteList[pool][i] && s_spriteNames[pool][i] == name)
+			{
+				s_spriteList[pool][i] = asset;
+				return asset;
+			}
+		}
+#endif
 		s_spriteList[pool].push_back(asset);
 		s_spriteNames[pool].push_back(name);
 		return asset;
 	}
+
+#ifdef __N64__
+	// Frees one level sprite. Its slot and name stay in the lists: save games refer to
+	// sprites by index, and the name is still written so a loaded game gets it back.
+	void freeWax(JediWax* wax)
+	{
+		if (!wax) { return; }
+		for (size_t i = 0; i < s_spriteList[POOL_LEVEL].size(); i++)
+		{
+			if (s_spriteList[POOL_LEVEL][i] != wax) { continue; }
+			s_sprites[POOL_LEVEL].erase(s_spriteNames[POOL_LEVEL][i]);
+			s_spriteList[POOL_LEVEL][i] = nullptr;
+			free(wax);
+			return;
+		}
+	}
+#endif
 				
 	const std::vector<JediWax*>& getWaxList(AssetPool pool)
 	{
@@ -513,7 +542,7 @@ namespace TFE_Sprite_Jedi
 			JediWax** waxList = s_spriteList[p].data();
 			for (size_t i = 0; i < waxCount; i++)
 			{
-				if (waxList[i] == wax)
+				if (waxList[i] && waxList[i] == wax)
 				{
 					*index = s32(i);
 					*pool = AssetPool(p);

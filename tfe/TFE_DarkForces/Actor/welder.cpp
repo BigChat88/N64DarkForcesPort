@@ -415,8 +415,9 @@ namespace TFE_DarkForces
 
 		actor_removePhysicsActorFromWorld(&welder->actor);
 		deleteLogicAndObject(logic);
-		level_free(welder);
+		// __N64__: free the task first, its pointer lives in the memory freed below.
 		task_free(welder->actor.actorTask);
+		level_free(welder);
 	}
 
 	void welder_clear()

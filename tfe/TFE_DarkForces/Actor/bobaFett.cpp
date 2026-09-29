@@ -833,8 +833,9 @@ namespace TFE_DarkForces
 
 		actor_removePhysicsActorFromWorld(physicsActor);
 		deleteLogicAndObject(&bobaFett->logic);
-		level_free(bobaFett);
+		// __N64__: free the task first, its pointer lives in the memory freed below.
 		task_free(physicsActor->actorTask);
+		level_free(bobaFett);
 	}
 
 	void bobaFett_serialize(Logic*& logic, SecObject* obj, Stream* stream)

@@ -998,8 +998,9 @@ namespace TFE_DarkForces
 
 		actor_removePhysicsActorFromWorld(&dragon->actor);
 		deleteLogicAndObject(logic);
-		level_free(dragon);
+		// __N64__: free the task first, its pointer lives in the memory freed below.
 		task_free(dragon->actor.actorTask);
+		level_free(dragon);
 	}
 
 	void kellDragon_serialize(Logic*& logic, SecObject* obj, Stream* stream)

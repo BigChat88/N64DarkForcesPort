@@ -18,4 +18,11 @@ namespace TFE_DarkForces
 	// Serialization
 	void generatorLogic_serialize(Logic*& logic, SecObject* obj, Stream* stream);
 	void generatorLogic_fixup(Logic* logic);
+
+#ifdef __N64__
+	// Used by src/n64/levelPurge_n64.cpp.
+	JediWax* generator_getWax(Logic* logic);
+	// Deletes a generator and its object if none of its spawned enemies is alive.
+	JBool generator_release(Logic* logic);
+#endif
 }  // namespace TFE_DarkForces

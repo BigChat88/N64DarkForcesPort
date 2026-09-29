@@ -145,6 +145,28 @@ namespace TFE_DarkForces
 	{
 	}
 
+#ifdef __N64__
+	JediWax* generator_getWax(Logic* logic)
+	{
+		return ((Generator*)logic)->wax;
+	}
+
+	// The cleanup function above frees nothing (generators normally live as long as the
+	// level), so the task and the generator are released here. Enemies still alive keep
+	// the generator task as their 'freeTask', so it can only go once they are all gone.
+	JBool generator_release(Logic* logic)
+	{
+		Generator* gen = (Generator*)logic;
+		if (gen->aliveCount > 0) { return JFALSE; }
+
+		task_free(logic->task);
+		allocator_free(gen->entities);
+		freeObject(logic->obj);
+		level_free(gen);
+		return JTRUE;
+	}
+#endif
+
 	JBool generatorLogicSetupFunc(Logic* logic, KEYWORD key)
 	{
 		Generator* genLogic = (Generator*)logic;
