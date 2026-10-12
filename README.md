@@ -2,7 +2,7 @@
 
 A port of **Star Wars: Dark Forces** to the Nintendo 64, built on
 [The Force Engine](https://github.com/luciusDXL/TheForceEngine) and
-[libdragon](https://github.com/DragonMinded/libdragon) (the open-source N64
+[libdragon](https://github.com/n64brew/libdragon) (the open-source N64
 homebrew SDK), plus a tool that turns your own copy of the game into a
 runnable `.z64`.
 
