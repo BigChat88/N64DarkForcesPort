@@ -960,13 +960,6 @@ namespace TFE_DarkForces
 		}
 		else
 		{
-			// Same default as the Return key when a dialog opens.
-			if (s_emState.confirmState != s_n64PrevConfirmState)
-			{
-				s_n64ConfirmSelected = (s_emState.confirmState == CONFIRM_STATE_NEXT) ? CONFIRM_YES : CONFIRM_NO;
-				// The A press that opened the dialog must not activate it when released.
-				s_n64ConfirmPressing = JFALSE;
-			}
 			if (left)  { s_n64ConfirmSelected = CONFIRM_NO;  s_n64ConfirmPressing = JFALSE; }
 			if (right) { s_n64ConfirmSelected = CONFIRM_YES; s_n64ConfirmPressing = JFALSE; }
 			s_emState.buttonPressed = s_n64ConfirmSelected;
@@ -984,11 +977,21 @@ namespace TFE_DarkForces
 				pressed = CONFIRM_NO;
 			}
 		}
-		s_n64PrevConfirmState = s_emState.confirmState;
 		s_emState.buttonHover = JTRUE;
 
 		// With no button pressed, the keyboard shortcuts are handled (none exist on the N64).
-		return pressed >= 0 ? escapeMenu_handleAction(action, pressed) : action;
+		if (pressed >= 0) { action = escapeMenu_handleAction(action, pressed); }
+
+		// Same default as the Return key when a dialog opens. This is set in the frame that
+		// opens it, since the menu is drawn right after this update.
+		if (s_emState.confirmState != s_n64PrevConfirmState)
+		{
+			s_n64ConfirmSelected = (s_emState.confirmState == CONFIRM_STATE_NEXT) ? CONFIRM_YES : CONFIRM_NO;
+			// The A press that opened the dialog must not activate it when released.
+			s_n64ConfirmPressing = JFALSE;
+		}
+		s_n64PrevConfirmState = s_emState.confirmState;
+		return action;
 	}
 #endif
 
