@@ -24,6 +24,8 @@
 #include <cstdio>
 #include <TFE_DarkForces/cheats.h>
 #include <TFE_DarkForces/mission.h>
+#include <TFE_Audio/audioSystem.h>
+#include <TFE_Audio/midiPlayer.h>
 #endif
 
 using namespace TFE_Jedi;
@@ -133,7 +135,10 @@ namespace TFE_DarkForces
 	static s32 s_n64ConfirmSelected = CONFIRM_NO;
 	static s32 s_n64PrevConfirmState = CONFIRM_STATE_NONE;
 	static JBool s_n64ConfirmPressing = JFALSE;	// A held on a dialog button
-	static JBool s_n64CheatsOpen = JFALSE;		// the Cheats list is shown over the menu
+	static JBool s_n64OptionsOpen = JFALSE;		// the Options panel is shown over the menu
+	static s32 s_n64OptionSelected = 0;
+	static JBool s_n64OptionsChanged = JFALSE;	// the volumes must be saved to SRAM
+	static JBool s_n64CheatsOpen = JFALSE;		// the Cheats list is shown over the Options panel
 	static s32 s_n64CheatSelected = 0;
 	static EscapeMenuAction n64_updateSelection(EscapeMenuAction action);
 #endif
@@ -300,6 +305,7 @@ namespace TFE_DarkForces
 #ifdef __N64__
 		s_n64Selected = ESC_BTN_RETURN;
 		s_n64PrevConfirmState = CONFIRM_STATE_NONE;
+		s_n64OptionsOpen = JFALSE;
 		s_n64CheatsOpen = JFALSE;
 #endif
 	}
@@ -438,7 +444,7 @@ namespace TFE_DarkForces
 #ifdef __N64__
 	// __N64__: every label and message of the menu is printed with the UI font (the one the
 	// Cheats list uses), left aligned on the buttons: the menu images have "Configuration"
-	// and "Quit to DOS" buttons, which are reused as "Restart Mission" and "Cheats", and no
+	// and "Quit to DOS" buttons, which are reused as "Restart Mission" and "Options", and no
 	// images for their labels. The labels baked into the images are painted over.
 
 	// Menu palette colors.
@@ -496,7 +502,7 @@ namespace TFE_DarkForces
 		{
 			s_levelComplete ? "NEXT MISSION" : "ABORT MISSION",
 			"RESTART MISSION",
-			"CHEATS",
+			"OPTIONS",
 			"RETURN TO GAME",
 		};
 		for (s32 i = 0; i < ESC_BTN_COUNT; i++)
@@ -555,11 +561,10 @@ namespace TFE_DarkForces
 	};
 	enum { N64_CHEAT_COUNT = sizeof(c_n64Cheats) / sizeof(c_n64Cheats[0]) };
 
-	// A panel in the style of the menu dialogs (there is no image tall enough for the list).
-	static void n64_drawCheats()
+	// A panel in the style of the menu dialogs (there is no image tall enough for the lists).
+	static void n64_drawPanel(const char* title, s32 x0, s32 y0, s32 w, s32 h)
 	{
 		u8* fb = s_emState.framebuffer;
-		const s32 x0 = 40, y0 = 24, w = 240, h = 152;
 		drawColoredQuad(x0, y0, w, h, 71, fb);					// metal
 		drawHorizontalLine(x0, x0 + w - 1, y0, 68, fb);			// light edges
 		drawVerticalLine(y0, y0 + h - 1, x0, 68, fb);
@@ -568,10 +573,105 @@ namespace TFE_DarkForces
 		drawColoredQuad(x0, y0 + 14, 3, h - 14, 166, fb);		// red trim, like the dialogs
 		drawColoredQuad(x0 + 8, y0 + 16, w - 16, h - 24, c_n64DialogBox, fb);
 
-		const char* title = "CHEATS";
 		const s32 titleX = x0 + (w - getStringPixelLength(title)) / 2;
 		print(title, titleX + 1, y0 + 5, c_n64LabelRedShadow, fb);
 		print(title, titleX, y0 + 4, c_n64LabelRed, fb);
+	}
+
+	// The Options panel: the music and sound effect volumes, changed with left/right in
+	// steps of 10%, the Rumble Pak and autoaim switches and the Cheats list. The options
+	// are TFE settings, saved to SRAM.
+	enum N64Option
+	{
+		N64_OPTION_MUSIC = 0,
+		N64_OPTION_SFX,
+		N64_OPTION_RUMBLE,
+		N64_OPTION_AUTOAIM,
+		N64_OPTION_CHEATS,
+		N64_OPTION_COUNT
+	};
+	enum { N64_VOLUME_STEPS = 10 };
+
+	static s32 n64_getVolumeStep(s32 option)
+	{
+		const TFE_Settings_Sound* sound = TFE_Settings::getSoundSettings();
+		const f32 volume = (option == N64_OPTION_MUSIC) ? sound->musicVolume : sound->soundFxVolume;
+		return clamp(s32(volume * N64_VOLUME_STEPS + 0.5f), 0, (s32)N64_VOLUME_STEPS);
+	}
+
+	static void n64_changeVolume(s32 option, s32 delta)
+	{
+		const s32 step = clamp(n64_getVolumeStep(option) + delta, 0, (s32)N64_VOLUME_STEPS);
+		if (step == n64_getVolumeStep(option)) { return; }
+
+		// Applied like sound_levelStart(); the sound is paused while the menu is open.
+		TFE_Settings_Sound* sound = TFE_Settings::getSoundSettings();
+		const f32 volume = f32(step) / f32(N64_VOLUME_STEPS);
+		if (option == N64_OPTION_MUSIC)
+		{
+			sound->musicVolume = volume;
+			TFE_MidiPlayer::setVolume(volume * sound->masterVolume);
+		}
+		else
+		{
+			sound->soundFxVolume = volume;
+			TFE_Audio::setVolume(volume * sound->masterVolume);
+		}
+		s_n64OptionsChanged = JTRUE;
+	}
+
+	// The setting of an ON/OFF option, or null.
+	static bool* n64_getSwitch(s32 option)
+	{
+		if (option == N64_OPTION_RUMBLE)  { return &TFE_Settings::getSystemSettings()->rumble; }
+		if (option == N64_OPTION_AUTOAIM) { return &TFE_Settings::getGameSettings()->df_enableAutoaim; }
+		return nullptr;
+	}
+
+	static void n64_saveOptions()
+	{
+		if (!s_n64OptionsChanged) { return; }
+		TFE_Settings::writeToDisk();
+		s_n64OptionsChanged = JFALSE;
+	}
+
+	static void n64_drawOptions()
+	{
+		u8* fb = s_emState.framebuffer;
+		const s32 x0 = 40, y0 = 48, w = 240, h = 92;
+		n64_drawPanel("OPTIONS", x0, y0, w, h);
+
+		const char* names[N64_OPTION_COUNT] = { "MUSIC VOLUME", "SFX VOLUME", "RUMBLE", "AUTOAIM", "CHEATS" };
+		for (s32 i = 0; i < N64_OPTION_COUNT; i++)
+		{
+			const s32 y = y0 + 22 + i * 12;
+			const JBool selected = (i == s_n64OptionSelected);
+			if (selected) { drawColoredQuad(x0 + 10, y - 2, w - 20, 11, 74, fb); }
+			const u8 color = selected ? c_n64LabelGreen : c_n64LabelRed;
+			print(names[i], x0 + 16, y, color, fb);
+			if (i == N64_OPTION_CHEATS) { continue; }
+			if (const bool* value = n64_getSwitch(i))
+			{
+				const char* state = *value ? "ON" : "OFF";
+				print(state, x0 + w - 16 - getStringPixelLength(state), y, color, fb);
+				continue;
+			}
+
+			// A bar of 10 segments, lit up to the volume.
+			const s32 step = n64_getVolumeStep(i);
+			const s32 barX = x0 + w - 16 - N64_VOLUME_STEPS * 6;
+			for (s32 s = 0; s < N64_VOLUME_STEPS; s++)
+			{
+				drawColoredQuad(barX + s * 6, y, 4, 7, s < step ? color : c_n64LabelGrayShadow, fb);
+			}
+		}
+	}
+
+	static void n64_drawCheats()
+	{
+		u8* fb = s_emState.framebuffer;
+		const s32 x0 = 40, y0 = 24, w = 240, h = 152;
+		n64_drawPanel("CHEATS", x0, y0, w, h);
 
 		for (s32 i = 0; i < N64_CHEAT_COUNT; i++)
 		{
@@ -600,6 +700,7 @@ namespace TFE_DarkForces
 			}
 			n64_drawButtonLabels(JFALSE);
 			if (s_n64CheatsOpen) { n64_drawCheats(); }
+			else if (s_n64OptionsOpen) { n64_drawOptions(); }
 			return;
 		}
 
@@ -792,6 +893,12 @@ namespace TFE_DarkForces
 			// TFE
 			reticle_enable(true);
 			TFE_RenderBackend::bloomPostEnable(true);
+#ifdef __N64__
+			// Start or a cheat can close the menu with the Options panel open.
+			s_n64OptionsOpen = JFALSE;
+			s_n64CheatsOpen = JFALSE;
+			n64_saveOptions();
+#endif
 		}
 
 #ifdef __N64__
@@ -847,8 +954,8 @@ namespace TFE_DarkForces
 				break;
 			case ESC_BTN_QUIT:
 #ifdef __N64__
-				s_n64CheatsOpen = JTRUE;
-				s_n64CheatSelected = 0;
+				s_n64OptionsOpen = JTRUE;
+				s_n64OptionSelected = 0;
 #else
 				s_emState.confirmState = CONFIRM_STATE_QUIT;
 #endif
@@ -926,14 +1033,44 @@ namespace TFE_DarkForces
 		{
 			if (up)   { s_n64CheatSelected = (s_n64CheatSelected + N64_CHEAT_COUNT - 1) % N64_CHEAT_COUNT; }
 			if (down) { s_n64CheatSelected = (s_n64CheatSelected + 1) % N64_CHEAT_COUNT; }
-			if (back) { s_n64CheatsOpen = JFALSE; }
+			if (back) { s_n64CheatsOpen = JFALSE; }	// back to the Options panel
 			else if (select)
 			{
 				// Back to the game, which runs the cheat on its next frame.
 				mission_queueCheat(c_n64Cheats[s_n64CheatSelected].id);
 				s_n64CheatsOpen = JFALSE;
+				s_n64OptionsOpen = JFALSE;
 				s_emState.escMenuOpen = JFALSE;
 				return ESC_RETURN;
+			}
+			s_emState.buttonPressed = s_n64Selected;
+			s_emState.buttonHover = JTRUE;
+			return action;
+		}
+		if (s_n64OptionsOpen)
+		{
+			if (up)   { s_n64OptionSelected = (s_n64OptionSelected + N64_OPTION_COUNT - 1) % N64_OPTION_COUNT; }
+			if (down) { s_n64OptionSelected = (s_n64OptionSelected + 1) % N64_OPTION_COUNT; }
+			if (s_n64OptionSelected == N64_OPTION_MUSIC || s_n64OptionSelected == N64_OPTION_SFX)
+			{
+				if (left)  { n64_changeVolume(s_n64OptionSelected, -1); }
+				if (right) { n64_changeVolume(s_n64OptionSelected, 1); }
+			}
+			if (back)
+			{
+				s_n64OptionsOpen = JFALSE;
+				n64_saveOptions();
+			}
+			else if (n64_getSwitch(s_n64OptionSelected) && (left || right || select))
+			{
+				bool* value = n64_getSwitch(s_n64OptionSelected);
+				*value = !*value;
+				s_n64OptionsChanged = JTRUE;
+			}
+			else if (select && s_n64OptionSelected == N64_OPTION_CHEATS)
+			{
+				s_n64CheatsOpen = JTRUE;
+				s_n64CheatSelected = 0;
 			}
 			s_emState.buttonPressed = s_n64Selected;
 			s_emState.buttonHover = JTRUE;

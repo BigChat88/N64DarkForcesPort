@@ -452,6 +452,7 @@ namespace TFE_Settings
 		writeHeader(settings, c_sectionNames[SECTION_SYSTEM]);
 		writeKeyValue_Bool(settings, "gameExitsToMenu",   s_systemSettings.gameQuitExitsToMenu);
 		writeKeyValue_Bool(settings, "returnToModLoader", s_systemSettings.returnToModLoader);
+		writeKeyValue_Bool(settings, "rumble",            s_systemSettings.rumble);
 	}
 
 	void writeA11ySettings(FileStream& settings)
@@ -907,6 +908,10 @@ namespace TFE_Settings
 		else if (strcasecmp("returnToModLoader", key) == 0)
 		{
 			s_systemSettings.returnToModLoader = parseBool(value);
+		}
+		else if (strcasecmp("rumble", key) == 0)
+		{
+			s_systemSettings.rumble = parseBool(value);
 		}
 	}
 	

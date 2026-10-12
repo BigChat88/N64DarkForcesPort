@@ -27,6 +27,9 @@
 #include <TFE_Jedi/Renderer/jediRenderer.h>
 #include <TFE_Jedi/Renderer/RClassic_Fixed/rclassicFixed.h>
 #include <TFE_Audio/audioSystem.h>
+#ifdef __N64__
+#include "rumble_n64.h"
+#endif
 
 // TFE
 #include <TFE_System/tfeMessage.h>
@@ -2252,6 +2255,15 @@ namespace TFE_DarkForces
 		s_prevDistFromFloor = max(distFromFloor, s_prevDistFromFloor);
 	}
 
+#ifdef __N64__
+	// __N64__: Rumble Pak feedback, longer for stronger hits (80ms to 400ms).
+	static void n64_rumbleOnDamage(fixed16_16 dmg)
+	{
+		const s32 amount = floor16(TFE_Jedi::abs(dmg));
+		Rumble_N64::pulse(80 + min(amount, 32) * 10);
+	}
+#endif
+
 	void player_applyDamage(fixed16_16 healthDmg, fixed16_16 shieldDmg, JBool playHitSound)
 	{
 		fixed16_16 shields = intToFixed16(s_playerInfo.shields);
@@ -2282,6 +2294,9 @@ namespace TFE_DarkForces
 
 				s_shieldDamageFx += (shieldDmg << 2);
 				s_shieldDamageFx = min(FIXED(17), s_shieldDamageFx);
+#ifdef __N64__
+				n64_rumbleOnDamage(shieldDmg);
+#endif
 			}
 		}
 		applyDmg = (s_invincibility == -2) ? 0 : 1;
@@ -2305,6 +2320,9 @@ namespace TFE_DarkForces
 				s_gasSectorTask = nullptr;
 				s_playerDying = JTRUE;
 				s_reviveTick = s_curTick + 436;
+#ifdef __N64__
+				Rumble_N64::pulse(700);
+#endif
 			}
 			else
 			{
@@ -2318,6 +2336,9 @@ namespace TFE_DarkForces
 				s32 healthFrac = fract16(health);
 				s_playerInfo.health = healthInt;
 				s_playerInfo.healthFract = healthFrac;
+#ifdef __N64__
+				n64_rumbleOnDamage(healthDmg);
+#endif
 			}
 			s_healthDamageFx += TFE_Jedi::abs(healthDmg) >> 1;
 			s_healthDamageFx = clamp(s_healthDamageFx, ONE_16, FIXED(17));

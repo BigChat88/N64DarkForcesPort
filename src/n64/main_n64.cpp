@@ -19,6 +19,7 @@
 #include "savefs_n64.h"
 #include "menunav_n64.h"
 #include "intro_n64.h"
+#include "rumble_n64.h"
 #include <TFE_DarkForces/automap.h>
 #include <TFE_DarkForces/GameUI/pda.h>
 
@@ -363,7 +364,8 @@ int main(void)
 #endif
 
 	setupPaths();
-	TFE_System::logOpen("the_force_engine_log.txt");
+	// No log file: "save:/" is the cartridge SRAM, which a log would fill and wear out.
+	// Messages still go to the debug output (see log.cpp).
 	TFE_System::logWrite(LOG_MSG, "Main", "The Force Engine (N64)");
 
 	// A failure to save the default settings (e.g. SRAM full) is not fatal.
@@ -434,6 +436,7 @@ int main(void)
 		s_curGame->loopGame();
 		const bool endInputFrame = TFE_Jedi::task_run() != 0;
 		TFE_Audio::n64_update();
+		Rumble_N64::update(s_curGame->canSave() && !s_curGame->isPaused());
 
 		TFE_RenderBackend::swap(true);
 

@@ -17,9 +17,7 @@ Forces files; the build packs them into the ROM.
 * Saves go to the cartridge's SRAM (256 kbit): your flashcart or emulator
   handles that automatically.
 * On real hardware, a flashcart that takes **64MB ROMs** (most do, e.g. the
-  EverDrive-64 or the SummerCart64). The ROM is about 63MB: the level files are
-  packed without their indentation and comments to make it fit (see
-  `tools/compact_levels.py`); your own game files are not modified.
+  EverDrive-64 or the SummerCart64).
 
 ## The game files you need
 
@@ -45,17 +43,14 @@ it and packs it into the ROM, nothing to do on your side. See
 ## How to build the ROM
 
 You only need **[Python 3](https://www.python.org/downloads/)** on your `PATH`
-(`python --version`). No Docker or N64 toolchain.
+(`python --version`). 
 
 1. Grab the latest [Release](../../releases) and unzip it.
 2. Put your Dark Forces files in `gamedata/` (see above).
 3. Build it:
    * **Windows:** double-click `build.cmd` (or run it from a terminal).
    * **Any platform:** `python tools/pack_rom.py`
-4. Wait for `OK -> output/darkforces64.z64`. That file is your ROM: run it in
-   an emulator (e.g. [Ares](https://ares-emu.net/),
-   [simple64](https://simple64.github.io/)) with the Expansion Pak enabled, or
-   copy it to a flashcart (e.g. EverDrive-64).
+4. Wait for `OK -> output/darkforces64.z64`. 
 
 Other sources for the game files:
 

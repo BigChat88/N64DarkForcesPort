@@ -200,6 +200,7 @@ struct TFE_Settings_System
 {
 	bool gameQuitExitsToMenu = true;	// Quitting from the game returns to the main menu instead.
 	bool returnToModLoader = true;		// Return to the Mod Loader if running a mod.
+	bool rumble = true;					// N64: the Rumble Pak shakes when the player takes damage.
 };
 
 /// <summary>
