@@ -10,9 +10,12 @@
 #include <TFE_RenderBackend/renderBackend.h>
 #include <TFE_RenderBackend/dynamicTexture.h>
 #include <TFE_RenderBackend/textureGpu.h>
+#include <TFE_Settings/settings.h>
 #include <TFE_System/system.h>
 #include "debug_n64.h"
 #include "overlay_n64.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include <libdragon.h>
@@ -38,11 +41,27 @@ namespace TFE_RenderBackend
 	// rewritten after the previous frame has been fully drawn (see swap()).
 	static u16 s_tlut[256] __attribute__((aligned(16)));
 
+	// Brightness: the gamma setting (1.0 = the original colors, 0.5 darker to 2.0 brighter) is applied
+	// while the palette is converted, so it costs nothing per pixel.
+	static u8 s_gammaRamp[256];
+	static f32 s_gammaRampValue = 0.0f;
+
+	static void updateGammaRamp()
+	{
+		const f32 gamma = std::clamp(TFE_Settings::getGraphicsSettings()->gamma, 0.5f, 2.0f);
+		if (gamma == s_gammaRampValue) { return; }
+		s_gammaRampValue = gamma;
+		for (s32 i = 0; i < 256; i++)
+		{
+			s_gammaRamp[i] = u8(powf(f32(i) / 255.0f, 1.0f / gamma) * 255.0f + 0.5f);
+		}
+	}
+
 	static u16 toRgba16(u32 color)
 	{
-		const u8 r = color & 0xff;
-		const u8 g = (color >> 8) & 0xff;
-		const u8 b = (color >> 16) & 0xff;
+		const u8 r = s_gammaRamp[color & 0xff];
+		const u8 g = s_gammaRamp[(color >> 8) & 0xff];
+		const u8 b = s_gammaRamp[(color >> 16) & 0xff];
 		return color_to_packed16(RGBA32(r, g, b, 0xff));
 	}
 
@@ -133,11 +152,17 @@ namespace TFE_RenderBackend
 
 	void setPalette(const u32* palette)
 	{
+		updateGammaRamp();
 		for (s32 i = 0; i < 256; i++)
 		{
 			s_palette[i] = palette[i];
 			s_tlut[i] = toRgba16(palette[i]);
 		}
+	}
+
+	void n64_refreshPalette()
+	{
+		setPalette(s_palette);
 	}
 
 	const u32* getPalette()

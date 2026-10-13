@@ -177,16 +177,18 @@ OBJS = $(addprefix $(BUILD_DIR)/,$(N64_SRC:.cpp=.o)) \
 # ROM filesystem as rom:/<NAME>.
 # They are staged in $(BUILD_DIR)/filesystem, where the level files in DARK.GOB
 # lose their indentation and comments (see tools/compact_levels.py): without
-# them the ROM fits in 64MB.
+# them the ROM fits in 64MB. The largest sprites in SPRITES.GOB are stored at
+# half resolution (see tools/shrink_sprites.py) so their levels fit in RAM.
 N64_MKDFS_ROOT = $(BUILD_DIR)/filesystem
 GAMEDATA = $(wildcard gamedata/*)
 FILESYSTEM_STAMP = $(BUILD_DIR)/filesystem.stamp
-$(FILESYSTEM_STAMP): $(GAMEDATA) tools/compact_levels.py
+$(FILESYSTEM_STAMP): $(GAMEDATA) tools/compact_levels.py tools/shrink_sprites.py
 	@echo "    [DATA] $(N64_MKDFS_ROOT)"
 	@rm -rf $(N64_MKDFS_ROOT)
 	@mkdir -p $(N64_MKDFS_ROOT)
 	@cp -r gamedata/. $(N64_MKDFS_ROOT)/
 	@python3 tools/compact_levels.py --dir $(N64_MKDFS_ROOT)
+	@python3 tools/shrink_sprites.py --dir $(N64_MKDFS_ROOT)
 	@touch $@
 
 N64_ROM_TITLE = "Dark Forces 64"

@@ -33,8 +33,15 @@ namespace TFE_DarkForces
 	{
 		if (!s_enabled || !s_playSeq) { return JFALSE; }
 		TFE_Settings_Sound* soundSettings = TFE_Settings::getSoundSettings();
+#ifdef __N64__
+		// The Options menu only has one music and one sound effect volume: they apply to
+		// the cutscenes too.
+		TFE_Audio::setVolume(soundSettings->soundFxVolume * soundSettings->masterVolume);
+		TFE_MidiPlayer::setVolume(soundSettings->musicVolume * soundSettings->masterVolume);
+#else
 		TFE_Audio::setVolume(soundSettings->cutsceneSoundFxVolume * soundSettings->masterVolume);
 		TFE_MidiPlayer::setVolume(soundSettings->cutsceneMusicVolume * soundSettings->masterVolume);
+#endif
 
 		// Search for the requested scene.
 		s32 found = 0;

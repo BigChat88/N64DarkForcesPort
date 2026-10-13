@@ -34,6 +34,7 @@ import zipfile
 from pathlib import Path
 
 from compact_levels import compact_gob
+from shrink_sprites import shrink_gob
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -230,6 +231,9 @@ def main() -> None:
         # Without the indentation and comments of the level files the ROM fits in 64MB.
         gob = fsroot / "DARK.GOB"
         gob.write_bytes(compact_gob(gob.read_bytes(), log=log))
+        # The largest sprites are stored at half resolution so their levels fit in RAM.
+        sprites = fsroot / "SPRITES.GOB"
+        sprites.write_bytes(shrink_gob(sprites.read_bytes(), log=log))
         intro = engine / "intro"
         if intro.is_dir():
             shutil.copytree(intro, fsroot / "intro")

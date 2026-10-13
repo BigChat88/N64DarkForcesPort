@@ -21,6 +21,8 @@
 #ifdef __N64__
 #include <TFE_DarkForces/Landru/ldraw.h>
 #include "menunav_n64.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <TFE_DarkForces/cheats.h>
 #include <TFE_DarkForces/mission.h>
@@ -303,7 +305,8 @@ namespace TFE_DarkForces
 		s_emState.buttonHover = false;
 		s_emState.confirmState = CONFIRM_STATE_NONE;
 #ifdef __N64__
-		s_n64Selected = ESC_BTN_RETURN;
+		// Once the level is complete the menu opens on "Next Mission".
+		s_n64Selected = s_levelComplete ? ESC_BTN_ABORT : ESC_BTN_RETURN;
 		s_n64PrevConfirmState = CONFIRM_STATE_NONE;
 		s_n64OptionsOpen = JFALSE;
 		s_n64CheatsOpen = JFALSE;
@@ -578,44 +581,68 @@ namespace TFE_DarkForces
 		print(title, titleX, y0 + 4, c_n64LabelRed, fb);
 	}
 
-	// The Options panel: the music and sound effect volumes, changed with left/right in
-	// steps of 10%, the Rumble Pak and autoaim switches and the Cheats list. The options
-	// are TFE settings, saved to SRAM.
+	// The Options panel: the music and sound effect volumes and the brightness, changed
+	// with left/right in 10 steps, the Rumble Pak, autoaim and always run switches and the
+	// Cheats list. The options are TFE settings, saved to SRAM.
 	enum N64Option
 	{
 		N64_OPTION_MUSIC = 0,
 		N64_OPTION_SFX,
+		N64_OPTION_BRIGHTNESS,
 		N64_OPTION_RUMBLE,
 		N64_OPTION_AUTOAIM,
+		N64_OPTION_AUTORUN,
 		N64_OPTION_CHEATS,
 		N64_OPTION_COUNT
 	};
-	enum { N64_VOLUME_STEPS = 10 };
+	enum { N64_BAR_STEPS = 10 };
 
-	static s32 n64_getVolumeStep(s32 option)
+	static bool n64_isBar(s32 option)
 	{
-		const TFE_Settings_Sound* sound = TFE_Settings::getSoundSettings();
-		const f32 volume = (option == N64_OPTION_MUSIC) ? sound->musicVolume : sound->soundFxVolume;
-		return clamp(s32(volume * N64_VOLUME_STEPS + 0.5f), 0, (s32)N64_VOLUME_STEPS);
+		return option == N64_OPTION_MUSIC || option == N64_OPTION_SFX || option == N64_OPTION_BRIGHTNESS;
 	}
 
-	static void n64_changeVolume(s32 option, s32 delta)
-	{
-		const s32 step = clamp(n64_getVolumeStep(option) + delta, 0, (s32)N64_VOLUME_STEPS);
-		if (step == n64_getVolumeStep(option)) { return; }
+	// Brightness is the gamma of the N64 palette conversion: the middle of the bar is the
+	// original (1.0), each step multiplies or divides it by the same factor, from 0.5
+	// (darker) to 2.0 (brighter).
+	enum { N64_BRIGHTNESS_DEFAULT = N64_BAR_STEPS / 2 };
 
-		// Applied like sound_levelStart(); the sound is paused while the menu is open.
+	static s32 n64_getBarStep(s32 option)
+	{
+		const TFE_Settings_Sound* sound = TFE_Settings::getSoundSettings();
+		f32 value;
+		if (option == N64_OPTION_MUSIC)    { value = sound->musicVolume; }
+		else if (option == N64_OPTION_SFX) { value = sound->soundFxVolume; }
+		else
+		{
+			const f32 gamma = std::max(TFE_Settings::getGraphicsSettings()->gamma, 0.01f);
+			value = 0.5f + log2f(gamma) * 0.5f;
+		}
+		return clamp(s32(floorf(value * N64_BAR_STEPS + 0.5f)), 0, (s32)N64_BAR_STEPS);
+	}
+
+	static void n64_changeBar(s32 option, s32 delta)
+	{
+		const s32 step = clamp(n64_getBarStep(option) + delta, 0, (s32)N64_BAR_STEPS);
+		if (step == n64_getBarStep(option)) { return; }
+
+		// Volumes are applied like sound_levelStart(); the sound is paused while the menu is open.
 		TFE_Settings_Sound* sound = TFE_Settings::getSoundSettings();
-		const f32 volume = f32(step) / f32(N64_VOLUME_STEPS);
+		const f32 value = f32(step) / f32(N64_BAR_STEPS);
 		if (option == N64_OPTION_MUSIC)
 		{
-			sound->musicVolume = volume;
-			TFE_MidiPlayer::setVolume(volume * sound->masterVolume);
+			sound->musicVolume = value;
+			TFE_MidiPlayer::setVolume(value * sound->masterVolume);
+		}
+		else if (option == N64_OPTION_SFX)
+		{
+			sound->soundFxVolume = value;
+			TFE_Audio::setVolume(value * sound->masterVolume);
 		}
 		else
 		{
-			sound->soundFxVolume = volume;
-			TFE_Audio::setVolume(volume * sound->masterVolume);
+			TFE_Settings::getGraphicsSettings()->gamma = exp2f(f32(step - N64_BRIGHTNESS_DEFAULT) / f32(N64_BRIGHTNESS_DEFAULT));
+			TFE_RenderBackend::n64_refreshPalette();
 		}
 		s_n64OptionsChanged = JTRUE;
 	}
@@ -625,6 +652,7 @@ namespace TFE_DarkForces
 	{
 		if (option == N64_OPTION_RUMBLE)  { return &TFE_Settings::getSystemSettings()->rumble; }
 		if (option == N64_OPTION_AUTOAIM) { return &TFE_Settings::getGameSettings()->df_enableAutoaim; }
+		if (option == N64_OPTION_AUTORUN) { return &TFE_Settings::getGameSettings()->df_autorun; }
 		return nullptr;
 	}
 
@@ -638,10 +666,10 @@ namespace TFE_DarkForces
 	static void n64_drawOptions()
 	{
 		u8* fb = s_emState.framebuffer;
-		const s32 x0 = 40, y0 = 48, w = 240, h = 92;
+		const s32 x0 = 40, y0 = 40, w = 240, h = 116;
 		n64_drawPanel("OPTIONS", x0, y0, w, h);
 
-		const char* names[N64_OPTION_COUNT] = { "MUSIC VOLUME", "SFX VOLUME", "RUMBLE", "AUTOAIM", "CHEATS" };
+		const char* names[N64_OPTION_COUNT] = { "MUSIC VOLUME", "SFX VOLUME", "BRIGHTNESS", "RUMBLE", "AUTOAIM", "ALWAYS RUN", "CHEATS" };
 		for (s32 i = 0; i < N64_OPTION_COUNT; i++)
 		{
 			const s32 y = y0 + 22 + i * 12;
@@ -657,10 +685,10 @@ namespace TFE_DarkForces
 				continue;
 			}
 
-			// A bar of 10 segments, lit up to the volume.
-			const s32 step = n64_getVolumeStep(i);
-			const s32 barX = x0 + w - 16 - N64_VOLUME_STEPS * 6;
-			for (s32 s = 0; s < N64_VOLUME_STEPS; s++)
+			// A bar of 10 segments, lit up to the value.
+			const s32 step = n64_getBarStep(i);
+			const s32 barX = x0 + w - 16 - N64_BAR_STEPS * 6;
+			for (s32 s = 0; s < N64_BAR_STEPS; s++)
 			{
 				drawColoredQuad(barX + s * 6, y, 4, 7, s < step ? color : c_n64LabelGrayShadow, fb);
 			}
@@ -1051,10 +1079,10 @@ namespace TFE_DarkForces
 		{
 			if (up)   { s_n64OptionSelected = (s_n64OptionSelected + N64_OPTION_COUNT - 1) % N64_OPTION_COUNT; }
 			if (down) { s_n64OptionSelected = (s_n64OptionSelected + 1) % N64_OPTION_COUNT; }
-			if (s_n64OptionSelected == N64_OPTION_MUSIC || s_n64OptionSelected == N64_OPTION_SFX)
+			if (n64_isBar(s_n64OptionSelected))
 			{
-				if (left)  { n64_changeVolume(s_n64OptionSelected, -1); }
-				if (right) { n64_changeVolume(s_n64OptionSelected, 1); }
+				if (left)  { n64_changeBar(s_n64OptionSelected, -1); }
+				if (right) { n64_changeBar(s_n64OptionSelected, 1); }
 			}
 			if (back)
 			{

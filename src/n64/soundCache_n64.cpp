@@ -9,6 +9,8 @@
 
 #include <libdragon.h>
 
+extern "C" void* n64_tryMalloc(size_t size);	// malloc_n64.cpp
+
 namespace SoundCache_N64
 {
 	enum
@@ -159,7 +161,9 @@ namespace SoundCache_N64
 
 		const u32 size = (u32)file.getSize();
 		makeRoom(size);
-		u8* data = (u8*)malloc(size);
+		// A fragmented heap may have no block large enough even after the whole cache
+		// is released: play silence then, instead of stopping on out of memory.
+		u8* data = (u8*)n64_tryMalloc(size);
 		if (!data)
 		{
 			file.close();

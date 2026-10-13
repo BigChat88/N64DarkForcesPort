@@ -47,6 +47,16 @@ namespace MemReserve_N64
 extern "C"
 {
 
+	// Like malloc(), but returns null instead of stopping when the heap is exhausted.
+	// Used for data the game can live without (a sound that cannot be loaded is silent).
+	void* n64_tryMalloc(size_t size)
+	{
+		void* ptr;
+		while (!(ptr = __real_malloc(size)) && size && SoundCache_N64::purgeOne()) {}
+		MemTrack_N64::onAlloc(ptr, size, (uintptr_t)__builtin_return_address(0));
+		return ptr;
+	}
+
 	void* __wrap_malloc(size_t size)
 	{
 		void* ptr;
